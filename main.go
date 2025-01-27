@@ -114,7 +114,7 @@ func incrementAllUsers(ctx context.Context) {
 
 // Add new function to check and notify users with high status
 func notifyHighStatusUsers(ctx context.Context, bot *tgbotapi.BotAPI) {
-	rows, err := db.QueryContext(ctx, "SELECT username FROM users WHERE status >= 3")
+	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users WHERE status >= 3")
 	if err != nil {
 		log.Println("Error querying users:", err)
 		return
@@ -124,11 +124,12 @@ func notifyHighStatusUsers(ctx context.Context, bot *tgbotapi.BotAPI) {
 	var pemalas []string
 	for rows.Next() {
 		var username string
-		if err := rows.Scan(&username); err != nil {
+		var status int
+		if err := rows.Scan(&username, &status); err != nil {
 			log.Println("Error scanning username:", err)
 			continue
 		}
-		pemalas = append(pemalas, "@"+username)
+		pemalas = append(pemalas, fmt.Sprintf("@%s: %d hari", username, status))
 	}
 
 	if err = rows.Err(); err != nil {
@@ -221,7 +222,7 @@ func getTopStats(ctx context.Context) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		stats = append(stats, fmt.Sprintf("@%s: %d", username, status))
+		stats = append(stats, fmt.Sprintf("@%s: %d hari", username, status))
 	}
 
 	if len(stats) == 0 {
@@ -496,7 +497,7 @@ func main() {
 						messageText = "🎉 Selamat! Semua user sudah SetoRan (Setor Keringatan)!"
 					} else {
 						messageText = "📊 Statistik SetoRan (Setor Keringatan):\n\n" +
-							"Berikut adalah daftar user yang belum SetoRan (Setor Keringatan):\n" +
+							"Berikut adalah daftar user yang belum SetoRan (Setor Keringatan) dalam satuan hari:\n" +
 							strings.Join(stats, "\n") +
 							"\n\nJangan lupa post aktivitas dengan hashtag #beatyesterday atau #garmin untuk reset status ya! 💪"
 					}
