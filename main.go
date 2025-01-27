@@ -325,7 +325,8 @@ func main() {
 	setRegex := regexp.MustCompile(`^/set @(\w+) (\d+)$`)
 	deleteRegex := regexp.MustCompile(`^/delete @(\w+)$`)
 	hashtagRegex := regexp.MustCompile(`#(beatyesterday|garmin)`)
-	setoranRegex := regexp.MustCompile(`^/setoran (https://(?:strava\.app\.link/\w+|www\.strava\.com/activities/\d+))$`)
+	setoranRegex := regexp.MustCompile(`(?i).*(?:https://(?:strava\.app\.link/\w+|www\.strava\.com/activities/\d+)).*`)
+	urlRegex := regexp.MustCompile(`https://(?:strava\.app\.link/\w+|www\.strava\.com/activities/\d+)`)
 
 	// Create a channel to signal when message processing is done
 	done := make(chan struct{})
@@ -513,9 +514,8 @@ func main() {
 					helpText := `🤖 *Daftar Perintah*
 
 *Untuk Semua Pengguna:*
-• Post dengan #beatyesterday atau #garmin - Reset status menjadi 0
 • /stats - Tampilkan 10 pengguna teratas yang belum olahraga
-• /setoran <strava-link> - Reset status dengan link aktivitas Strava
+• Post link Strava - Reset status dengan mengirim link aktivitas Strava (maksimal 2 hari yang lalu)
 
 *Khusus Admin:*
 • /set @username <angka> - Atur status pengguna ke angka tertentu
@@ -531,13 +531,16 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 					msg.MessageThreadId = update.Message.MessageThreadId
 					msg.ParseMode = "Markdown"
 					bot.Send(msg)
-				} else if match := setoranRegex.FindStringSubmatch(text); match != nil {
-					activityURL := match[1]
+				} else if match := setoranRegex.FindString(text); match != "" {
+					// Extract the URL using the global regex
+					activityURL := urlRegex.FindString(match)
+
 					valid, err := validateActivity(activityURL)
 					if err != nil {
 						msg := tgbotapi.NewMessage(chatID, "Error validating activity.")
 						msg.MessageThreadId = update.Message.MessageThreadId
 						bot.Send(msg)
+						continue
 					}
 
 					if valid {
@@ -547,6 +550,7 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 							msg := tgbotapi.NewMessage(chatID, "Error resetting status.")
 							msg.MessageThreadId = update.Message.MessageThreadId
 							bot.Send(msg)
+							continue
 						}
 						msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("🎉 Selamat @%s! Status kamu sudah direset ke 0.\n\nTetap semangat berolahraga! 💪", username))
 						msg.MessageThreadId = update.Message.MessageThreadId
@@ -645,8 +649,7 @@ func validateActivity(activityURL string) (bool, error) {
 				fmt.Println("Error extracting date from title: ", err)
 			}
 
-			fmt.Println("cek cek", date.After(time.Now().AddDate(0, 0, -2)))
-			if date.After(time.Now().AddDate(0, 0, -2)) {
+			if date.After(time.Now().AddDate(0, 0, -1)) {
 				valid = true
 			}
 		}
