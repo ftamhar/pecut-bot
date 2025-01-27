@@ -325,7 +325,7 @@ func main() {
 	setRegex := regexp.MustCompile(`^/set @(\w+) (\d+)$`)
 	deleteRegex := regexp.MustCompile(`^/delete @(\w+)$`)
 	hashtagRegex := regexp.MustCompile(`#(beatyesterday|garmin)`)
-	setoranRegex := regexp.MustCompile(`^/setoran (https://strava.app.link/\w+)$`)
+	setoranRegex := regexp.MustCompile(`^/setoran (https://(?:strava\.app\.link/\w+|www\.strava\.com/activities/\d+))$`)
 
 	// Create a channel to signal when message processing is done
 	done := make(chan struct{})
@@ -552,7 +552,7 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 						msg.MessageThreadId = update.Message.MessageThreadId
 						bot.Send(msg)
 					} else {
-						msg := tgbotapi.NewMessage(chatID, "Activity tidak valid.")
+						msg := tgbotapi.NewMessage(chatID, "Activity tidak valid atau sudah lebih dari 2 hari yang lalu.")
 						msg.MessageThreadId = update.Message.MessageThreadId
 						bot.Send(msg)
 					}
@@ -645,6 +645,7 @@ func validateActivity(activityURL string) (bool, error) {
 				fmt.Println("Error extracting date from title: ", err)
 			}
 
+			fmt.Println("cek cek", date.After(time.Now().AddDate(0, 0, -2)))
 			if date.After(time.Now().AddDate(0, 0, -2)) {
 				valid = true
 			}
