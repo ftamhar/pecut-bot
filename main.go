@@ -514,7 +514,6 @@ func main() {
 • /stats - Tampilkan 10 pengguna teratas yang belum olahraga
 
 *Khusus Admin:*
-• /add @username - Tambah status pengguna sebanyak 1 hari
 • /set @username <angka> - Atur status pengguna ke angka tertentu
 • /delete @username - Hapus pengguna dari database
 
