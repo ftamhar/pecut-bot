@@ -373,20 +373,21 @@ func main() {
 
 				// Check for hashtags first
 				if hashtagRegex.MatchString(text) {
-					username := update.Message.From.UserName
-					if username != "" {
-						err := resetStatus(ctx, username)
-						if err != nil {
-							msg := tgbotapi.NewMessage(chatID, "Error resetting status.")
-							msg.MessageThreadId = update.Message.MessageThreadId
-							bot.Send(msg)
-							continue
-						}
-						msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("🎉 Selamat @%s! Status kamu sudah direset ke 0.\n\nTetap semangat berolahraga! 💪", username))
-						msg.MessageThreadId = update.Message.MessageThreadId
-						bot.Send(msg)
-						continue
-					}
+					continue
+					// username := update.Message.From.UserName
+					// if username != "" {
+					// 	err := resetStatus(ctx, username)
+					// 	if err != nil {
+					// 		msg := tgbotapi.NewMessage(chatID, "Error resetting status.")
+					// 		msg.MessageThreadId = update.Message.MessageThreadId
+					// 		bot.Send(msg)
+					// 		continue
+					// 	}
+					// 	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("🎉 Selamat @%s! Status kamu sudah direset ke 0.\n\nTetap semangat berolahraga! 💪", username))
+					// 	msg.MessageThreadId = update.Message.MessageThreadId
+					// 	bot.Send(msg)
+					// 	continue
+					// }
 				}
 
 				if match := addRegex.FindStringSubmatch(text); match != nil {
@@ -514,6 +515,7 @@ func main() {
 *Untuk Semua Pengguna:*
 • Post dengan #beatyesterday atau #garmin - Reset status menjadi 0
 • /stats - Tampilkan 10 pengguna teratas yang belum olahraga
+• /setoran <strava-link> - Reset status dengan link aktivitas Strava
 
 *Khusus Admin:*
 • /set @username <angka> - Atur status pengguna ke angka tertentu
