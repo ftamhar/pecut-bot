@@ -388,24 +388,25 @@ func main() {
 				}
 
 				if match := addRegex.FindStringSubmatch(text); match != nil {
-					if !isAdmin(bot, chatID, userID) {
-						msg := tgbotapi.NewMessage(chatID, "You must be an admin to use this command.")
-						msg.MessageThreadId = update.Message.MessageThreadId
-						bot.Send(msg)
-						continue
-					}
+					continue
+					// if !isAdmin(bot, chatID, userID) {
+					// 	msg := tgbotapi.NewMessage(chatID, "You must be an admin to use this command.")
+					// 	msg.MessageThreadId = update.Message.MessageThreadId
+					// 	bot.Send(msg)
+					// 	continue
+					// }
 
-					username := match[1]
-					status, err := incrementStatus(ctx, username)
-					if err != nil {
-						msg := tgbotapi.NewMessage(chatID, "Error updating status.")
-						msg.MessageThreadId = update.Message.MessageThreadId
-						bot.Send(msg)
-						continue
-					}
-					msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("⚠️ Status @%s bertambah menjadi: %d hari\n\nAyo segera post aktivitas dengan hashtag #beatyesterday atau #garmin! 🏃‍♂️", username, status))
-					msg.MessageThreadId = update.Message.MessageThreadId
-					bot.Send(msg)
+					// username := match[1]
+					// status, err := incrementStatus(ctx, username)
+					// if err != nil {
+					// 	msg := tgbotapi.NewMessage(chatID, "Error updating status.")
+					// 	msg.MessageThreadId = update.Message.MessageThreadId
+					// 	bot.Send(msg)
+					// 	continue
+					// }
+					// msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("⚠️ Status @%s bertambah menjadi: %d hari\n\nAyo segera post aktivitas dengan hashtag #beatyesterday atau #garmin! 🏃‍♂️", username, status))
+					// msg.MessageThreadId = update.Message.MessageThreadId
+					// bot.Send(msg)
 
 				} else if match := resetRegex.FindStringSubmatch(text); match != nil {
 					continue
@@ -504,6 +505,28 @@ func main() {
 
 					msg := tgbotapi.NewMessage(chatID, messageText)
 					msg.MessageThreadId = update.Message.MessageThreadId
+					bot.Send(msg)
+				} else if text == "/help" {
+					helpText := `🤖 *Daftar Perintah*
+
+*Untuk Semua Pengguna:*
+• Post dengan #beatyesterday atau #garmin - Reset status menjadi 0
+• /stats - Tampilkan 10 pengguna teratas yang belum olahraga
+
+*Khusus Admin:*
+• /add @username - Tambah status pengguna sebanyak 1 hari
+• /set @username <angka> - Atur status pengguna ke angka tertentu
+• /delete @username - Hapus pengguna dari database
+
+Bot akan otomatis:
+• Menambah status semua pengguna pada jam 12 malam WIB
+• Mengirim pengingat pada jam 8 pagi WIB untuk pengguna dengan status ≥ 3 hari
+
+_Catatan: Gunakan perintah hanya di thread yang ditentukan._`
+
+					msg := tgbotapi.NewMessage(chatID, helpText)
+					msg.MessageThreadId = update.Message.MessageThreadId
+					msg.ParseMode = "Markdown"
 					bot.Send(msg)
 				}
 			}
