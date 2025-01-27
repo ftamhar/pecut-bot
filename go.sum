@@ -1,0 +1,6 @@
+github.com/egovorukhin/telebot-api v0.0.21 h1:zp739k9fSelfsbqQ7006YGJ0A6HMP8bhK2HTVFBE3Yc=
+github.com/egovorukhin/telebot-api v0.0.21/go.mod h1:Fb+NhMN/OOXnMMGdZfnXzFXKneh4KNXIa9PNso/5aNo=
+github.com/mattn/go-sqlite3 v1.14.24 h1:tpSp2G2KyMnnQu99ngJ47EIkWVmliIizyZBfPrBWDRM=
+github.com/mattn/go-sqlite3 v1.14.24/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
+github.com/robfig/cron/v3 v3.0.1 h1:WdRxkvbJztn8LMz/QEvLN5sBU+xKpSqwwUO1Pjr4qDs=
+github.com/robfig/cron/v3 v3.0.1/go.mod h1:eQICP3HwyT7UooqI/z+Ov+PtYAWygg1TEWWzGIFLtro=
