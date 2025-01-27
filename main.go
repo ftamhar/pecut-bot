@@ -58,6 +58,12 @@ func initDB() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// add field strava_name if not exists
+	query = `ALTER TABLE users ADD COLUMN strava_name TEXT;`
+	_, err = db.Exec(query)
+	if err != nil {
+		log.Println("Error adding strava_name field:", err)
+	}
 }
 
 // Increments the specified user's status
@@ -294,6 +300,30 @@ func ensureUserExists(ctx context.Context, username string) error {
 	return nil
 }
 
+func setStravaName(ctx context.Context, username string, stravaName string) error {
+	username = strings.ToLower(username)
+
+	// Check if user exists
+	var exists bool
+	err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = ?)", username).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("error checking user existence: %v", err)
+	}
+
+	if exists {
+		// Update existing user
+		_, err = db.ExecContext(ctx, "UPDATE users SET strava_name = ? WHERE username = ?", stravaName, username)
+	} else {
+		// Create new user with strava_name
+		_, err = db.ExecContext(ctx, "INSERT INTO users (username, strava_name, status) VALUES (?, ?, 0)", username, stravaName)
+	}
+
+	if err != nil {
+		return fmt.Errorf("error setting strava name: %v", err)
+	}
+	return nil
+}
+
 func main() {
 	initDB()
 	defer db.Close()
@@ -327,6 +357,7 @@ func main() {
 	hashtagRegex := regexp.MustCompile(`#(beatyesterday|garmin)`)
 	setoranRegex := regexp.MustCompile(`(?i).*(?:https://(?:strava\.app\.link/\w+|www\.strava\.com/activities/\d+)).*`)
 	urlRegex := regexp.MustCompile(`https://(?:strava\.app\.link/\w+|www\.strava\.com/activities/\d+)`)
+	nameRegex := regexp.MustCompile(`^/name @(\w+) (.+)$`)
 
 	// Create a channel to signal when message processing is done
 	done := make(chan struct{})
@@ -510,6 +541,27 @@ func main() {
 					msg := tgbotapi.NewMessage(chatID, messageText)
 					msg.MessageThreadId = update.Message.MessageThreadId
 					bot.Send(msg)
+				} else if match := nameRegex.FindStringSubmatch(text); match != nil {
+					if !isAdmin(bot, chatID, userID) {
+						msg := tgbotapi.NewMessage(chatID, "You must be an admin to use this command.")
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+						continue
+					}
+
+					username := match[1]   // First capture group: the username
+					stravaName := match[2] // Second capture group: the Strava name
+
+					if err := setStravaName(ctx, username, stravaName); err != nil {
+						msg := tgbotapi.NewMessage(chatID, "Error updating Strava name.")
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+						continue
+					}
+
+					msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Strava name untuk @%s telah diupdate menjadi: %s", username, stravaName))
+					msg.MessageThreadId = update.Message.MessageThreadId
+					bot.Send(msg)
 				} else if text == "/help" {
 					helpText := `🤖 *Daftar Perintah*
 
@@ -519,6 +571,7 @@ func main() {
 
 *Khusus Admin:*
 • /set @username <angka> - Atur status pengguna ke angka tertentu
+• /name @username <nama_strava> - Update nama Strava pengguna
 • /delete @username - Hapus pengguna dari database
 
 Bot akan otomatis:
@@ -535,7 +588,7 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 					// Extract the URL using the global regex
 					activityURL := urlRegex.FindString(match)
 
-					valid, err := validateActivity(activityURL)
+					valid, err := validateActivity(ctx, activityURL, username)
 					if err != nil {
 						msg := tgbotapi.NewMessage(chatID, "Error validating activity.")
 						msg.MessageThreadId = update.Message.MessageThreadId
@@ -629,7 +682,13 @@ func ExtractDateFromStravaTitle(title string) (time.Time, error) {
 	return jakartaDate, nil
 }
 
-func validateActivity(activityURL string) (bool, error) {
+func validateActivity(ctx context.Context, activityURL string, username string) (bool, error) {
+	row := db.QueryRowContext(ctx, "SELECT strava_name FROM users WHERE username = ?", username)
+	var stravaName string
+	err := row.Scan(&stravaName)
+	if err != nil {
+		return false, err
+	}
 	var valid bool
 	c2 := colly.NewCollector(
 		colly.AllowedDomains("www.strava.com"),
@@ -644,7 +703,13 @@ func validateActivity(activityURL string) (bool, error) {
 	c2.OnHTML("meta", func(e *colly.HTMLElement) {
 		// printing all URLs associated with the <a> tag on the page
 		if e.Attr("name") == "description" {
-			date, err := ExtractDateFromStravaTitle(e.Attr("content"))
+			content := e.Attr("content")
+			if !strings.Contains(content, stravaName) {
+				valid = false
+				return
+			}
+
+			date, err := ExtractDateFromStravaTitle(content)
 			if err != nil {
 				fmt.Println("Error extracting date from title: ", err)
 			}
