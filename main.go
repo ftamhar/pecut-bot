@@ -571,7 +571,7 @@ func main() {
 
 *Khusus Admin:*
 • /set @username <angka> - Atur status pengguna ke angka tertentu
-• /name @username <nama_strava> - Update nama Strava pengguna
+• /name @username <nama\_strava> - Update nama Strava pengguna
 • /delete @username - Hapus pengguna dari database
 
 Bot akan otomatis:
