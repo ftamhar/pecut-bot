@@ -1,4 +1,4 @@
-# Pecut Bot
+# Pecut Bot (PB)
 
 ## Run
 
