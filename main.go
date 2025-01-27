@@ -15,6 +15,7 @@ import (
 	"time"
 
 	tgbotapi "github.com/egovorukhin/telebot-api"
+	"github.com/gocolly/colly"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/robfig/cron/v3"
 )
@@ -324,6 +325,7 @@ func main() {
 	setRegex := regexp.MustCompile(`^/set @(\w+) (\d+)$`)
 	deleteRegex := regexp.MustCompile(`^/delete @(\w+)$`)
 	hashtagRegex := regexp.MustCompile(`#(beatyesterday|garmin)`)
+	setoranRegex := regexp.MustCompile(`^/setoran (https://strava.app.link/\w+)$`)
 
 	// Create a channel to signal when message processing is done
 	done := make(chan struct{})
@@ -527,6 +529,31 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 					msg.MessageThreadId = update.Message.MessageThreadId
 					msg.ParseMode = "Markdown"
 					bot.Send(msg)
+				} else if match := setoranRegex.FindStringSubmatch(text); match != nil {
+					activityURL := match[1]
+					valid, err := validateActivity(activityURL)
+					if err != nil {
+						msg := tgbotapi.NewMessage(chatID, "Error validating activity.")
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+					}
+
+					if valid {
+						username := update.Message.From.UserName
+						err := resetStatus(ctx, username)
+						if err != nil {
+							msg := tgbotapi.NewMessage(chatID, "Error resetting status.")
+							msg.MessageThreadId = update.Message.MessageThreadId
+							bot.Send(msg)
+						}
+						msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("🎉 Selamat @%s! Status kamu sudah direset ke 0.\n\nTetap semangat berolahraga! 💪", username))
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+					} else {
+						msg := tgbotapi.NewMessage(chatID, "Activity tidak valid.")
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+					}
 				}
 			}
 		}
@@ -549,4 +576,100 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 	}
 
 	log.Println("Application shutdown complete")
+}
+
+var re = regexp.MustCompile(`/activities/(\d+)`)
+
+func ExtractStravaActivityURL(shareableURL string) (string, error) {
+	// Look for the pattern /activities/NUMBER in the URL
+	match := re.FindStringSubmatch(shareableURL)
+
+	if len(match) < 2 {
+		return "", fmt.Errorf("no activity ID found in URL")
+	}
+
+	// Construct the base Strava activity URL
+	activityID := match[1]
+	baseURL := "https://www.strava.com/activities/" + activityID
+
+	return baseURL, nil
+}
+
+var re2 = regexp.MustCompile(`(?:on|On) ([A-Z][a-z]+ \d{1,2}, \d{4})`)
+
+func ExtractDateFromStravaTitle(title string) (time.Time, error) {
+	// Regular expression to match the date pattern
+	match := re2.FindStringSubmatch(title)
+
+	if len(match) < 2 {
+		return time.Time{}, fmt.Errorf("no date found in title")
+	}
+
+	// Parse the date string in local time first
+	date, err := time.Parse("January 2, 2006", match[1])
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse date: %v", err)
+	}
+
+	// Load Asia/Jakarta timezone
+	jakartaLoc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to load Jakarta timezone: %v", err)
+	}
+
+	// Convert the date to Asia/Jakarta timezone
+	jakartaDate := date.In(jakartaLoc)
+
+	return jakartaDate, nil
+}
+
+func validateActivity(activityURL string) (bool, error) {
+	var valid bool
+	c2 := colly.NewCollector(
+		colly.AllowedDomains("www.strava.com"),
+	)
+
+	// triggered when the scraper encounters an error
+	c2.OnError(func(_ *colly.Response, err error) {
+		fmt.Println("Something went wrong: ", err)
+	})
+
+	// triggered when a CSS selector matches an element
+	c2.OnHTML("meta", func(e *colly.HTMLElement) {
+		// printing all URLs associated with the <a> tag on the page
+		if e.Attr("name") == "description" {
+			date, err := ExtractDateFromStravaTitle(e.Attr("content"))
+			if err != nil {
+				fmt.Println("Error extracting date from title: ", err)
+			}
+
+			if date.After(time.Now().AddDate(0, 0, -2)) {
+				valid = true
+			}
+		}
+	})
+
+	if strings.Contains(activityURL, "www.strava.com") {
+		c2.Visit(activityURL)
+		return valid, nil
+	}
+
+	// instantiate a new collector object
+	c := colly.NewCollector(
+		colly.AllowedDomains("strava.app.link"),
+	)
+
+	// triggered when a CSS selector matches an element
+	c.OnHTML(".secondary-action", func(e *colly.HTMLElement) {
+		activityURL, err := ExtractStravaActivityURL(e.Attr("href"))
+		if err != nil {
+			fmt.Println("Error extracting Strava activity URL: ", err)
+		}
+
+		c2.Visit(activityURL)
+	})
+
+	// open the target URL
+	c.Visit(activityURL)
+	return valid, nil
 }
