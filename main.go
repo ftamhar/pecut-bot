@@ -215,7 +215,7 @@ func isAdmin(bot *tgbotapi.BotAPI, chatID int64, userID int64) bool {
 
 // Retrieves the top 10 users ordered by status (descending)
 func getTopStats(ctx context.Context) ([]string, error) {
-	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users where status > 0 ORDER BY status DESC LIMIT 10")
+	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users where status >= 3 ORDER BY status DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -533,7 +533,7 @@ func main() {
 						messageText = "🎉 Selamat! Semua user sudah SetoRan (Setor Keringatan)!"
 					} else {
 						messageText = "📊 Statistik SetoRan (Setor Keringatan):\n\n" +
-							"Berikut adalah daftar user yang belum SetoRan (Setor Keringatan) dalam satuan hari:\n" +
+							"Berikut adalah daftar user yang belum SetoRan (Setor Keringatan) dalam waktu 3 hari atau lebih:\n" +
 							strings.Join(stats, "\n") +
 							"\n\nJangan lupa post aktivitas dengan hashtag #beatyesterday atau #garmin untuk reset status ya! 💪"
 					}
@@ -566,7 +566,7 @@ func main() {
 					helpText := `🤖 *Daftar Perintah*
 
 *Untuk Semua Pengguna:*
-• /stats - Tampilkan 10 pengguna teratas yang belum olahraga
+• /stats - Tampilkan 10 pengguna teratas yang belum SetoRan dalam waktu 3 hari atau lebih
 • Post link Strava - Reset status dengan mengirim link aktivitas Strava (maksimal 2 hari yang lalu)
 
 *Khusus Admin:*

@@ -1,0 +1,13 @@
+Menghitung:
+Jumlah Provinsi (Total)
+Jumlah Provinsi (yang sudah disurvey) -> hasil filter di atas
+Jumlah Kabupaten/ Kota (Total)
+Jumlah Kabupaten/ Kota (yang sudah disurvey) -> hasil filter di atas
+Jumlah Fasyankes (Total) -> facility type id
+Jumlah Fasyankes (yang sudah disurvey) -> hasil filter diatas
+Jumlah Pengguna (menurut role: admin, surveyor, pendamping) -> menu list user
+Jumlah geoinformation lengkap (tersedia Lat dan Long valid) -> dari data change request
+
+Berikan fungsi filtering untuk
+Wilayah	: Provinsi, Kabupaten, Kecamatan, hingga Kelurahan -> di list data change request
+Jenis Sarana	: RS, Puskesmas, etc (sesuai enumerator parameter) -> di list data change request
