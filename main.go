@@ -590,6 +590,7 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 
 					valid, err := validateActivity(ctx, activityURL, username)
 					if err != nil {
+						log.Println("Error validating activity: ", err)
 						msg := tgbotapi.NewMessage(chatID, "Error validating activity.")
 						msg.MessageThreadId = update.Message.MessageThreadId
 						bot.Send(msg)
@@ -654,18 +655,18 @@ func ExtractStravaActivityURL(shareableURL string) (string, error) {
 	return baseURL, nil
 }
 
-var re2 = regexp.MustCompile(`(?:on|On) ([A-Z][a-z]+ \d{1,2}, \d{4})`)
+var re2 = regexp.MustCompile(`([A-Z][a-z]+ \d{1,2}, \d{4})`)
 
 func ExtractDateFromStravaTitle(title string) (time.Time, error) {
 	// Regular expression to match the date pattern
 	match := re2.FindStringSubmatch(title)
 
-	if len(match) < 2 {
+	if len(match) < 1 {
 		return time.Time{}, fmt.Errorf("no date found in title")
 	}
 
 	// Parse the date string in local time first
-	date, err := time.Parse("January 2, 2006", match[1])
+	date, err := time.Parse("January 2, 2006", match[0])
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to parse date: %v", err)
 	}
