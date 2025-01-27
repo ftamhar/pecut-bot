@@ -700,21 +700,15 @@ func validateActivity(ctx context.Context, activityURL string, username string) 
 		fmt.Println("Something went wrong: ", err)
 	})
 
-	// triggered when a CSS selector matches an element
-	c2.OnHTML("meta", func(e *colly.HTMLElement) {
-		// printing all URLs associated with the <a> tag on the page
-		if e.Attr("name") == "description" {
-			content := e.Attr("content")
-			if !strings.Contains(content, stravaName) {
-				valid = false
+	// get the date from the activity
+	c2.OnHTML("time", func(e *colly.HTMLElement) {
+		datetime := e.Attr("datetime")
+		if datetime != "" && !valid {
+			date, err := time.Parse("2006-01-02T15:04:05", datetime)
+			if err != nil {
+				log.Printf("Error parsing date: %v", err)
 				return
 			}
-
-			date, err := ExtractDateFromStravaTitle(content)
-			if err != nil {
-				fmt.Println("Error extracting date from title: ", err)
-			}
-
 			if date.After(time.Now().AddDate(0, 0, -1)) {
 				valid = true
 			}
