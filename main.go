@@ -147,7 +147,7 @@ func notifyHighStatusUsers(ctx context.Context, bot *tgbotapi.BotAPI) {
 	if len(pemalas) > 0 {
 		message := "🚨 Reminder untuk olahraga!\n\nUser yang belum olahraga 3 hari atau lebih:\n" +
 			strings.Join(pemalas, "\n") +
-			"\n\nJangan lupa post aktivitas dengan hashtag #beatyesterday atau #garmin ya!"
+			"\n\nJangan lupa kirim link aktivitas Strava untuk mereset status ya!"
 		msg := tgbotapi.NewMessage(chatID, message)
 		msg.MessageThreadId = threadID
 		_, err := bot.Send(msg)
@@ -535,7 +535,7 @@ func main() {
 						messageText = "📊 Statistik SetoRan (Setor Keringatan):\n\n" +
 							"Berikut adalah daftar user yang belum SetoRan (Setor Keringatan) dalam waktu 3 hari atau lebih:\n" +
 							strings.Join(stats, "\n") +
-							"\n\nJangan lupa post aktivitas dengan hashtag #beatyesterday atau #garmin untuk reset status ya! 💪"
+							"\n\nJangan lupa kirim link aktivitas Strava untuk mereset status ya! 💪"
 					}
 
 					msg := tgbotapi.NewMessage(chatID, messageText)
