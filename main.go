@@ -684,6 +684,7 @@ func ExtractDateFromStravaTitle(title string) (time.Time, error) {
 }
 
 func validateActivity(ctx context.Context, activityURL string, username string) (bool, error) {
+	username = strings.ToLower(username)
 	row := db.QueryRowContext(ctx, "SELECT strava_name FROM users WHERE username = ?", username)
 	var stravaName string
 	err := row.Scan(&stravaName)
