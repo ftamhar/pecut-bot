@@ -121,7 +121,7 @@ func incrementAllUsers(ctx context.Context) {
 
 // Add new function to check and notify users with high status
 func notifyHighStatusUsers(ctx context.Context, bot *tgbotapi.BotAPI) {
-	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users WHERE status >= 3")
+	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users WHERE status >= 3 ORDER BY status DESC, username")
 	if err != nil {
 		log.Println("Error querying users:", err)
 		return
@@ -215,7 +215,7 @@ func isAdmin(bot *tgbotapi.BotAPI, chatID int64, userID int64) bool {
 
 // Retrieves the top 10 users ordered by status (descending)
 func getTopStats(ctx context.Context) ([]string, error) {
-	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users where status >= 3 ORDER BY status DESC")
+	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users where status >= 3 ORDER BY status DESC, username")
 	if err != nil {
 		return nil, err
 	}
@@ -442,7 +442,6 @@ func main() {
 					// msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("⚠️ Status @%s bertambah menjadi: %d hari\n\nAyo segera post aktivitas dengan hashtag #beatyesterday atau #garmin! 🏃‍♂️", username, status))
 					// msg.MessageThreadId = update.Message.MessageThreadId
 					// bot.Send(msg)
-
 				} else if match := resetRegex.FindStringSubmatch(text); match != nil {
 					continue
 					// if !isAdmin(bot, chatID, userID) {
@@ -463,7 +462,6 @@ func main() {
 					// msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("🎉 Selamat @%s! Status kamu sudah direset ke 0.\n\nTetap semangat berolahraga! 💪", username))
 					// msg.MessageThreadId = update.Message.MessageThreadId
 					// bot.Send(msg)
-
 				} else if match := setRegex.FindStringSubmatch(text); match != nil {
 					if !isAdmin(bot, chatID, userID) {
 						msg := tgbotapi.NewMessage(chatID, "You must be an admin to use this command.")
