@@ -608,7 +608,7 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 							continue
 						}
 						payload := `
-						Selamat @%s! Status kamu sudah direset ke 0.
+Selamat @%s! Status kamu sudah direset ke 0.
 
 Tetap semangat berolahraga! 💪
 
@@ -617,7 +617,7 @@ Tanggal: %s
 Jarak: %s
 Waktu: %s
 Ketinggian: %s
-						`
+`
 
 						msg := tgbotapi.NewMessage(chatID,
 							fmt.Sprintf(
