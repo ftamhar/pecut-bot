@@ -1,9 +1,47 @@
 package main
 
 type Activity struct {
-	ActivityDate string
-	ActivityName string
-	Distance     string
-	Time         string
-	Elevation    string
+	ActivityDate  string
+	ActivityName  string
+	DistanceMeter float64
+	Time          string
+	Elevation     int
+	Pace          string
+	ImageUrl      string
+
+	Status   int
+	TimeZone string
+}
+
+type ResponseJson struct {
+	Props struct {
+		PageProps struct {
+			Activity struct {
+				MapImages []struct {
+					URL string `json:"url"`
+				} `json:"mapImages"`
+				Visibility string `json:"visibility"`
+				Athlete    struct {
+					ID        string `json:"id"`
+					FirstName string `json:"firstName"`
+					LastName  string `json:"lastName"`
+				} `json:"athlete"`
+				CommentCount int    `json:"commentCount"`
+				Description  string `json:"description"`
+				Name         string `json:"name"`
+				Scalars      struct {
+					Distance      float64 `json:"distance"`
+					ElevationGain int     `json:"elevationGain"`
+					MovingTime    int     `json:"movingTime"`
+				} `json:"scalars"`
+				StartLocal string `json:"startLocal"`
+				Streams    struct {
+					Location []struct {
+						Lat float64 `json:"lat"`
+						Lng float64 `json:"lng"`
+					} `json:"location"`
+				} `json:"streams"`
+			} `json:"activity"`
+		} `json:"pageProps"`
+	} `json:"props"`
 }
