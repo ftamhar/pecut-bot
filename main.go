@@ -36,8 +36,11 @@ func init() {
 	flag.BoolVar(&verbose, "v", false, "Enable verbose logging")
 	flag.Parse()
 
-	if botToken == "" || chatID == 0 || threadID == 0 {
-		log.Fatal("Bot token, chat ID, and thread ID must be provided as flags.")
+	// Check if running in test mode via an environment variable
+	if os.Getenv("SKIP_FLAG_CHECK") == "" {
+		if botToken == "" || chatID == 0 || threadID == 0 {
+			log.Fatal("Bot token, chat ID, and thread ID must be provided as flags.")
+		}
 	}
 }
 
@@ -586,7 +589,7 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 					// Extract the URL using the global regex
 					activityURL := urlRegex.FindString(match)
 
-					valid, err := validateActivity(ctx, activityURL, username)
+					meta, err := validateActivity(ctx, activityURL, username)
 					if err != nil {
 						log.Println("Error validating activity: ", err)
 						msg := tgbotapi.NewMessage(chatID, "Error validating activity.")
@@ -595,7 +598,7 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 						continue
 					}
 
-					if valid {
+					if meta != nil {
 						username := update.Message.From.UserName
 						err := resetStatus(ctx, username)
 						if err != nil {
@@ -604,7 +607,29 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 							bot.Send(msg)
 							continue
 						}
-						msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("🎉 Selamat @%s! Status kamu sudah direset ke 0.\n\nTetap semangat berolahraga! 💪", username))
+						payload := `
+Selamat @%s! Status kamu sudah direset ke 0.
+
+Tetap semangat berolahraga! 💪
+
+Aktivitas: %s
+Tanggal: %s
+Jarak: %s
+Waktu: %s
+Ketinggian: %s
+`
+
+						msg := tgbotapi.NewMessage(chatID,
+							fmt.Sprintf(
+								payload,
+								username,
+								meta.ActivityName,
+								meta.ActivityDate,
+								meta.Distance,
+								meta.Time,
+								meta.Elevation,
+							),
+						)
 						msg.MessageThreadId = update.Message.MessageThreadId
 						bot.Send(msg)
 					} else {
@@ -681,15 +706,19 @@ func ExtractDateFromStravaTitle(title string) (time.Time, error) {
 	return jakartaDate, nil
 }
 
-func validateActivity(ctx context.Context, activityURL string, username string) (bool, error) {
+func validateActivity(ctx context.Context, activityURL string, username string) (meta *Activity, err error) {
 	username = strings.ToLower(username)
 	row := db.QueryRowContext(ctx, "SELECT strava_name FROM users WHERE username = ?", username)
 	var stravaName string
-	err := row.Scan(&stravaName)
+	err = row.Scan(&stravaName)
 	if err != nil {
-		return false, err
+		return
 	}
-	var valid bool
+
+	return crawlling(activityURL)
+}
+
+func crawlling(activityURL string) (meta *Activity, err error) {
 	c2 := colly.NewCollector(
 		colly.AllowedDomains("www.strava.com"),
 	)
@@ -699,24 +728,66 @@ func validateActivity(ctx context.Context, activityURL string, username string) 
 		fmt.Println("Something went wrong: ", err)
 	})
 
-	// get the date from the activity
-	c2.OnHTML("time", func(e *colly.HTMLElement) {
-		datetime := e.Attr("datetime")
-		if datetime != "" && !valid {
-			date, err := time.Parse("2006-01-02T15:04:05", datetime)
+	// Extract information from the activity summary
+	c2.OnHTML("div[data-cy='activity-summary']", func(e *colly.HTMLElement) {
+
+		// Extract datetime from time element
+		datetime := e.ChildAttr("time", "datetime")
+		var activityDate time.Time
+		var err error
+		if datetime != "" {
+			// Try parsing with the exact format that matches the input
+			activityDate, err = time.Parse("2006-01-02T15:04:05", datetime)
 			if err != nil {
-				log.Printf("Error parsing date: %v", err)
+				// If that fails, try adding UTC timezone marker
+				activityDate, err = time.Parse(time.RFC3339, datetime+"Z")
+				if err != nil {
+					log.Printf("Error parsing date: %v", err)
+					return
+				}
+			}
+
+			// Check if activity is recent
+			if !activityDate.After(time.Now().AddDate(0, 0, -1)) {
 				return
 			}
-			if date.After(time.Now().AddDate(0, 0, -1)) {
-				valid = true
+		} else {
+			return
+		}
+
+		// Extract activity name - look for h1 tag
+		activityName := e.ChildText("h1")
+		// Extract stats - look for elements within the stats list
+		var distance, activityTime, elevation string
+
+		// Find the stats list
+		e.ForEach("ul li div", func(_ int, el *colly.HTMLElement) {
+			// Get the label and value within each stat
+			label := el.ChildText("span")
+			value := el.ChildText("div")
+
+			switch label {
+			case "Distance":
+				distance = value
+			case "Time":
+				activityTime = value
+			case "Elevation":
+				elevation = value
 			}
+		})
+
+		meta = &Activity{
+			ActivityDate: activityDate.Format("2006-01-02 15:04:05"),
+			ActivityName: activityName,
+			Distance:     distance,
+			Time:         activityTime,
+			Elevation:    elevation,
 		}
 	})
 
 	if strings.Contains(activityURL, "www.strava.com") {
 		c2.Visit(activityURL)
-		return valid, nil
+		return
 	}
 
 	// instantiate a new collector object
@@ -736,5 +807,6 @@ func validateActivity(ctx context.Context, activityURL string, username string) 
 
 	// open the target URL
 	c.Visit(activityURL)
-	return valid, nil
+
+	return
 }
