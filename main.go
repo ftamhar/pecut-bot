@@ -443,7 +443,6 @@ func main() {
 					}
 
 					if meta != nil {
-						username := update.Message.From.UserName
 						err := resetStatus(ctx, username, meta.Status)
 						if err != nil {
 							msg := tgbotapi.NewMessage(chatID, "Error resetting status.")
