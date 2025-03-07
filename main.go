@@ -748,7 +748,7 @@ func crawlling(activityURL, stravaName string) (meta *Activity, err error) {
 			imgLocation = data.Props.PageProps.Activity.MapImages[0].URL
 		}
 
-		timeZone := "+07:00"
+		timeZone := "+08:00"
 
 		if len(data.Props.PageProps.Activity.Streams.Location) > 0 {
 			timeZone = getUTCOffset(f.GetTimezoneName(data.Props.PageProps.Activity.Streams.Location[0].Lng, data.Props.PageProps.Activity.Streams.Location[0].Lat))
