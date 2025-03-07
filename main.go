@@ -370,7 +370,7 @@ func main() {
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
 
-	setRegex := regexp.MustCompile(`^/set @(\w+) (\d+)$`)
+	setRegex := regexp.MustCompile(`^/set @(\w+) (.+)$`)
 	deleteRegex := regexp.MustCompile(`^/delete @(\w+)$`)
 	setoranRegex := regexp.MustCompile(`(?i).*(?:https://(?:strava\.app\.link/\w+|www\.strava\.com/activities/\d+)).*`)
 	urlRegex := regexp.MustCompile(`https://(?:strava\.app\.link/\w+|www\.strava\.com/activities/\d+)`)
