@@ -122,7 +122,7 @@ func notifyHighStatusUsers(ctx context.Context, bot *tgbotapi.BotAPI) {
 			continue
 		}
 
-		if status == 0 {
+		if status <= 3 {
 			continue
 		}
 
@@ -228,7 +228,7 @@ func getTopStats(ctx context.Context) ([]string, error) {
 			return nil, err
 		}
 
-		if status == 0 {
+		if status <= 3 {
 			continue
 		}
 
