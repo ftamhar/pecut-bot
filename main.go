@@ -122,12 +122,12 @@ func notifyHighStatusUsers(ctx context.Context, bot *tgbotapi.BotAPI) {
 			continue
 		}
 
-		if status <= 3 {
+		if status < 3 {
 			continue
 		}
 
 		// handle old value
-		if status < 20 && status > 3 {
+		if status < 20 && status >= 3 {
 			pemalas = append(pemalas, fmt.Sprintf("@%s: %d hari", username, status))
 			continue
 		}
@@ -228,12 +228,12 @@ func getTopStats(ctx context.Context) ([]string, error) {
 			return nil, err
 		}
 
-		if status <= 3 {
+		if status < 3 {
 			continue
 		}
 
 		// handle old value
-		if status < 20 && status > 3 {
+		if status < 20 && status >= 3 {
 			stats = append(stats, fmt.Sprintf("@%s: %d hari", username, status))
 			continue
 		}
