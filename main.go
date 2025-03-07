@@ -521,7 +521,7 @@ func main() {
 • Post link Strava - Reset status dengan mengirim link aktivitas Strava (maksimal 2 hari yang lalu)
 
 *Khusus Admin:*
-• /set @username <angka> - Atur status pengguna ke angka tertentu
+• /set @username <02 Jan 2006 15:04:05 MST> - Atur status pengguna ke angka tertentu
 • /name @username <nama\_strava> - Update nama Strava pengguna
 • /delete @username - Hapus pengguna dari database
 
