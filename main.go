@@ -455,14 +455,13 @@ func main() {
 
 Tetap semangat berolahraga! 💪
 
-Aktivitas: *%s*
-Tanggal: *%s*
-Jarak: *%.02fkm*
-Pace: *%s/km*
-Waktu: *%s*
-Ketinggian: *%dm*
-Foto Rute: *%s*
-`
+Aktivitas: %s
+Tanggal: %s
+Jarak: %.02fkm
+Pace: %s/km
+Waktu: %s
+Ketinggian: %dm
+Foto Rute: %s`
 
 						msg := tgbotapi.NewMessage(chatID,
 							fmt.Sprintf(
@@ -478,8 +477,11 @@ Foto Rute: *%s*
 							),
 						)
 						msg.MessageThreadId = update.Message.MessageThreadId
-						msg.ParseMode = "Markdown"
-						bot.Send(msg)
+						_, err = bot.Send(msg)
+						if err != nil {
+							log.Println("Error sending message: ", err)
+						}
+
 					} else {
 						msg := tgbotapi.NewMessage(chatID, "Activity tidak valid atau sudah lebih dari 2 hari yang lalu.")
 						msg.MessageThreadId = update.Message.MessageThreadId
@@ -630,13 +632,13 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 
 Tetap semangat berolahraga! 💪
 
-Aktivitas: *%s*
-Tanggal: *%s*
-Jarak: *%.02fkm*
-Pace: *%s/km*
-Waktu: *%s*
-Ketinggian: *%dm*
-Foto Rute: *%s*
+Aktivitas: %s
+Tanggal: %s
+Jarak: %.02fkm
+Pace: %s/km
+Waktu: %s
+Ketinggian: %dm
+Foto Rute: %s
 `
 
 						msg := tgbotapi.NewMessage(chatID,
@@ -653,7 +655,6 @@ Foto Rute: *%s*
 							),
 						)
 						msg.MessageThreadId = update.Message.MessageThreadId
-						msg.ParseMode = "Markdown"
 						bot.Send(msg)
 					} else {
 						msg := tgbotapi.NewMessage(chatID, "Activity tidak valid atau sudah lebih dari 2 hari yang lalu.")
