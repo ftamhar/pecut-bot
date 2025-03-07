@@ -673,7 +673,8 @@ func crawlling(activityURL, stravaName string) (meta *Activity, err error) {
 
 		imgLocation := "-"
 
-		if len(data.Props.PageProps.Activity.MapImages) > 0 {
+		if len(data.Props.PageProps.Activity.MapImages) > 0 &&
+			len(data.Props.PageProps.Activity.Streams.Location) > 0 {
 			imgLocation = data.Props.PageProps.Activity.MapImages[0].URL
 		}
 
