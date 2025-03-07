@@ -375,6 +375,7 @@ func main() {
 	setoranRegex := regexp.MustCompile(`(?i).*(?:https://(?:strava\.app\.link/\w+|www\.strava\.com/activities/\d+)).*`)
 	urlRegex := regexp.MustCompile(`https://(?:strava\.app\.link/\w+|www\.strava\.com/activities/\d+)`)
 	nameRegex := regexp.MustCompile(`^/name @(\w+) (.+)$`)
+	setByLinkRegex := regexp.MustCompile(`^/sbl @(\w+) (.+)$`)
 
 	// Create a channel to signal when message processing is done
 	done := make(chan struct{})
@@ -417,6 +418,75 @@ func main() {
 
 				// Handle group topic change
 				if update.Message.ReplyToMessage.MessageThreadId != threadID {
+					continue
+				}
+				if match := setByLinkRegex.FindStringSubmatch(text); match != nil { // set status
+					if !isAdmin(bot, chatID, userID) {
+						msg := tgbotapi.NewMessage(chatID, "You must be an admin to use this command.")
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+						continue
+					}
+
+					username := match[1]
+
+					// Extract the URL using the global regex
+					activityURL := urlRegex.FindString(match[2])
+
+					meta, err := validateActivity(ctx, activityURL, username)
+					if err != nil {
+						log.Println("Error validating activity: ", err)
+						msg := tgbotapi.NewMessage(chatID, "Error validating activity.")
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+						continue
+					}
+
+					if meta != nil {
+						username := update.Message.From.UserName
+						err := resetStatus(ctx, username, meta.Status)
+						if err != nil {
+							msg := tgbotapi.NewMessage(chatID, "Error resetting status.")
+							msg.MessageThreadId = update.Message.MessageThreadId
+							bot.Send(msg)
+							continue
+						}
+
+						payload := `Selamat @%s! Status kamu sudah direset.
+
+Tetap semangat berolahraga! 💪
+
+Aktivitas: *%s*
+Tanggal: *%s*
+Jarak: *%.02fkm*
+Pace: *%s/km*
+Waktu: *%s*
+Ketinggian: *%dm*
+Foto Rute: *%s*
+`
+
+						msg := tgbotapi.NewMessage(chatID,
+							fmt.Sprintf(
+								payload,
+								username,
+								meta.ActivityName,
+								time.Unix(int64(meta.Status), 0).In(location).Format(timeFormat),
+								meta.DistanceMeter/1000,
+								meta.Pace,
+								meta.Time,
+								meta.Elevation,
+								meta.ImageUrl,
+							),
+						)
+						msg.MessageThreadId = update.Message.MessageThreadId
+						msg.ParseMode = "Markdown"
+						bot.Send(msg)
+					} else {
+						msg := tgbotapi.NewMessage(chatID, "Activity tidak valid atau sudah lebih dari 2 hari yang lalu.")
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+					}
+
 					continue
 				}
 
