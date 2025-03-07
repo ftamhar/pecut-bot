@@ -342,6 +342,8 @@ func setStravaName(ctx context.Context, username string, stravaName string) erro
 	return nil
 }
 
+const timeFormat = "02 Jan 2006 15:04:05 MST"
+
 func main() {
 	initDB()
 	defer db.Close()
@@ -428,7 +430,7 @@ func main() {
 
 					username := match[1]
 
-					status, err := time.Parse(time.RFC3339, match[2])
+					status, err := time.Parse(timeFormat, match[2])
 					if err != nil {
 						msg := tgbotapi.NewMessage(chatID, "Invalid status value. Please provide a valid number.")
 						msg.MessageThreadId = update.Message.MessageThreadId
@@ -443,7 +445,7 @@ func main() {
 						bot.Send(msg)
 						continue
 					}
-					msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Status @%s telah diset ke: %s", username, status.Format(time.RFC3339)))
+					msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Status @%s telah diset ke: %s", username, status.Format(timeFormat)))
 					msg.MessageThreadId = update.Message.MessageThreadId
 					bot.Send(msg)
 
@@ -573,7 +575,7 @@ Foto Rute: *%s*
 								payload,
 								username,
 								meta.ActivityName,
-								time.Unix(int64(meta.Status), 0).In(location).Format(time.RFC1123),
+								time.Unix(int64(meta.Status), 0).In(location).Format(timeFormat),
 								meta.DistanceMeter/1000,
 								meta.Pace,
 								meta.Time,
@@ -678,7 +680,6 @@ func crawlling(activityURL, stravaName string) (meta *Activity, err error) {
 		timeZone := "Z"
 
 		if len(data.Props.PageProps.Activity.Streams.Location) > 0 {
-			fmt.Println("masuk sini")
 			timeZone = getUTCOffset(f.GetTimezoneName(data.Props.PageProps.Activity.Streams.Location[0].Lng, data.Props.PageProps.Activity.Streams.Location[0].Lat))
 		}
 
@@ -700,62 +701,6 @@ func crawlling(activityURL, stravaName string) (meta *Activity, err error) {
 			TimeZone:      timeZone,
 		}
 	})
-
-	// Extract information from the activity summary
-	// c2.OnHTML("div[data-cy='activity-summary']", func(e *colly.HTMLElement) {
-	// 	// Extract datetime from time element
-	// 	datetime := e.ChildAttr("time", "datetime")
-	// 	var activityDate time.Time
-	// 	var err error
-	// 	if datetime != "" {
-	// 		// Try parsing with the exact format that matches the input
-	// 		activityDate, err = time.Parse("2006-01-02T15:04:05", datetime)
-	// 		if err != nil {
-	// 			// If that fails, try adding UTC timezone marker
-	// 			activityDate, err = time.Parse(time.RFC3339, datetime+"Z")
-	// 			if err != nil {
-	// 				log.Printf("Error parsing date: %v", err)
-	// 				return
-	// 			}
-	// 		}
-	//
-	// 		// Check if activity is recent
-	// 		if !activityDate.After(time.Now().AddDate(0, 0, -1)) {
-	// 			return
-	// 		}
-	// 	} else {
-	// 		return
-	// 	}
-	//
-	// 	// Extract activity name - look for h1 tag
-	// 	activityName := e.ChildText("h1")
-	// 	// Extract stats - look for elements within the stats list
-	// 	var distance, activityTime, elevation string
-	//
-	// 	// Find the stats list
-	// 	e.ForEach("ul li div", func(_ int, el *colly.HTMLElement) {
-	// 		// Get the label and value within each stat
-	// 		label := el.ChildText("span")
-	// 		value := el.ChildText("div")
-	//
-	// 		switch label {
-	// 		case "Distance":
-	// 			distance = value
-	// 		case "Time":
-	// 			activityTime = value
-	// 		case "Elevation":
-	// 			elevation = value
-	// 		}
-	// 	})
-	//
-	// 	meta = &Activity{
-	// 		ActivityDate: activityDate.Format("2006-01-02 15:04:05"),
-	// 		ActivityName: activityName,
-	// 		Distance:     distance,
-	// 		Time:         activityTime,
-	// 		Elevation:    elevation,
-	// 	}
-	// })
 
 	if strings.Contains(activityURL, "www.strava.com") {
 		c2.Visit(activityURL)
