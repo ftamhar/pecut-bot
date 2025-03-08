@@ -5,7 +5,7 @@ type Activity struct {
 	ActivityName  string
 	DistanceMeter float64
 	Time          string
-	Elevation     int
+	Elevation     float64
 	Pace          string
 	ImageUrl      string
 
@@ -31,7 +31,7 @@ type ResponseJson struct {
 				Name         string `json:"name"`
 				Scalars      struct {
 					Distance      float64 `json:"distance"`
-					ElevationGain int     `json:"elevationGain"`
+					ElevationGain float64 `json:"elevationGain"`
 					MovingTime    int     `json:"movingTime"`
 				} `json:"scalars"`
 				StartLocal string `json:"startLocal"`

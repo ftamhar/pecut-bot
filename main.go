@@ -460,7 +460,7 @@ Tanggal: %s
 Jarak: %.02fkm
 Pace: %s/km
 Waktu: %s
-Ketinggian: %dm
+Ketinggian: %.02fm
 Foto Rute: %s`
 
 						msg := tgbotapi.NewMessage(chatID,
@@ -637,7 +637,7 @@ Tanggal: %s
 Jarak: %.02fkm
 Pace: %s/km
 Waktu: %s
-Ketinggian: %dm
+Ketinggian: %.02fm
 Foto Rute: %s
 `
 
