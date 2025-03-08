@@ -804,7 +804,7 @@ func crawlling(activityURL, stravaName string) (meta *Activity, err error) {
 			Elevation:     data.Props.PageProps.Activity.Scalars.ElevationGain,
 			Pace:          fmt.Sprintf("%02d:%02d", paceMinute, paceSecond),
 			ImageUrl:      imgLocation,
-			Status:        int(t.Unix()),
+			Status:        int(t.Unix()) + data.Props.PageProps.Activity.Scalars.MovingTime,
 			TimeZone:      timeZone,
 		}
 	})
