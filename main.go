@@ -104,7 +104,7 @@ func resetStatus(ctx context.Context, username string, status int) error {
 
 // Add new function to check and notify users with high status
 func notifyHighStatusUsers(ctx context.Context, bot *tgbotapi.BotAPI) {
-	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users ORDER BY status DESC, username")
+	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users ORDER BY status, username")
 	if err != nil {
 		log.Println("Error querying users:", err)
 		return
@@ -229,7 +229,7 @@ func isAdmin(bot *tgbotapi.BotAPI, chatID int64, userID int64) bool {
 
 // Retrieves the top 10 users ordered by status (descending)
 func getTopStats(ctx context.Context) ([]string, error) {
-	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users ORDER BY status DESC, username")
+	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users ORDER BY status, username")
 	if err != nil {
 		return nil, err
 	}
