@@ -138,7 +138,25 @@ func notifyHighStatusUsers(ctx context.Context, bot *tgbotapi.BotAPI) {
 		if dif.Hours() < 24*3 {
 			continue
 		}
-		pemalas = append(pemalas, fmt.Sprintf("@%s: %.02f hari", username, dif.Hours()/24))
+
+		days := int(dif.Hours() / 24)
+		remainingHours := int(dif.Hours()) % 24
+		remainingSeconds := int(dif.Seconds()) % 3600 % 60
+
+		if remainingHours > 0 {
+			duration := fmt.Sprintf("%d hari %d jam %d detik", days, remainingHours, remainingSeconds)
+			pemalas = append(pemalas, fmt.Sprintf("@%s: %s", username, duration))
+			continue
+		}
+		if remainingSeconds > 0 {
+			duration := fmt.Sprintf("%d hari %d detik", days, remainingSeconds)
+			pemalas = append(pemalas, fmt.Sprintf("@%s: %s", username, duration))
+			continue
+		}
+
+		duration := fmt.Sprintf("%d hari", days)
+
+		pemalas = append(pemalas, fmt.Sprintf("@%s: %s", username, duration))
 	}
 
 	if err = rows.Err(); err != nil {
@@ -244,7 +262,25 @@ func getTopStats(ctx context.Context) ([]string, error) {
 		if dif.Hours() < 24*3 {
 			continue
 		}
-		stats = append(stats, fmt.Sprintf("@%s: %.02f hari", username, dif.Hours()/24))
+
+		days := int(dif.Hours() / 24)
+		remainingHours := int(dif.Hours()) % 24
+		remainingSeconds := int(dif.Seconds()) % 3600 % 60
+
+		if remainingHours > 0 {
+			duration := fmt.Sprintf("%d hari %d jam %d detik", days, remainingHours, remainingSeconds)
+			stats = append(stats, fmt.Sprintf("@%s: %s", username, duration))
+			continue
+		}
+		if remainingSeconds > 0 {
+			duration := fmt.Sprintf("%d hari %d detik", days, remainingSeconds)
+			stats = append(stats, fmt.Sprintf("@%s: %s", username, duration))
+			continue
+		}
+
+		duration := fmt.Sprintf("%d hari", days)
+
+		stats = append(stats, fmt.Sprintf("@%s: %s", username, duration))
 	}
 
 	if len(stats) == 0 {
