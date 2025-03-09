@@ -82,19 +82,36 @@ func initDB() {
 	if err != nil {
 		log.Println("Error adding strava_name field:", err)
 	}
+
+	query = `ALTER TABLE users ADD COLUMN deleted_at INTEGER;`
+	_, err = db.Exec(query)
+	if err != nil {
+		log.Println("Error adding deleted_at field:", err)
+	}
+	query = `CREATE INDEX IF NOT EXISTS idx_deleted_at ON users (deleted_at);`
+	_, err = db.Exec(query)
+	if err != nil {
+		log.Println("Error adding deleted_at index:", err)
+	}
+
+	query = `CREATE INDEX IF NOT EXISTS idx_username_deleted_at ON users (username, deleted_at);`
+	_, err = db.Exec(query)
+	if err != nil {
+		log.Println("Error adding username_deleted_at index:", err)
+	}
 }
 
 func resetStatus(ctx context.Context, username string, status int) error {
 	username = strings.ToLower(username)
 
 	var exists bool
-	err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = ?)", username).Scan(&exists)
+	err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = ? AND deleted_at IS NULL)", username).Scan(&exists)
 	if err != nil {
 		return err
 	}
 
 	if exists {
-		_, err = db.ExecContext(ctx, "UPDATE users SET status = ? WHERE username = ?", status, username)
+		_, err = db.ExecContext(ctx, "UPDATE users SET status = ? WHERE username = ? AND deleted_at IS NULL", status, username)
 	} else {
 		_, err = db.ExecContext(ctx, "INSERT INTO users (username, status) VALUES (?, ?)", username, status)
 	}
@@ -104,7 +121,7 @@ func resetStatus(ctx context.Context, username string, status int) error {
 
 // Add new function to check and notify users with high status
 func notifyHighStatusUsers(ctx context.Context, bot *tgbotapi.BotAPI) {
-	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users ORDER BY status, username")
+	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users WHERE deleted_at IS NULL ORDER BY status, username")
 	if err != nil {
 		log.Println("Error querying users:", err)
 		return
@@ -229,7 +246,7 @@ func isAdmin(bot *tgbotapi.BotAPI, chatID int64, userID int64) bool {
 
 // Retrieves the top 10 users ordered by status (descending)
 func getTopStats(ctx context.Context) ([]string, error) {
-	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users ORDER BY status, username")
+	rows, err := db.QueryContext(ctx, "SELECT username, status FROM users WHERE deleted_at IS NULL ORDER BY status, username")
 	if err != nil {
 		return nil, err
 	}
@@ -295,13 +312,13 @@ func setStatusUnix(ctx context.Context, username string, status int) error {
 	username = strings.ToLower(username)
 
 	var exists bool
-	err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = ?)", username).Scan(&exists)
+	err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = ? AND deleted_at IS NULL)", username).Scan(&exists)
 	if err != nil {
 		return err
 	}
 
 	if exists {
-		_, err = db.ExecContext(ctx, "UPDATE users SET status = ? WHERE username = ?", status, username)
+		_, err = db.ExecContext(ctx, "UPDATE users SET status = ? WHERE username = ? AND deleted_at IS NULL", status, username)
 	} else {
 		_, err = db.ExecContext(ctx, "INSERT INTO users (username, status) VALUES (?, ?)", username, status)
 	}
@@ -312,7 +329,25 @@ func setStatusUnix(ctx context.Context, username string, status int) error {
 // Deletes the specified user from the database
 func deleteUser(ctx context.Context, username string) error {
 	username = strings.ToLower(username)
-	result, err := db.ExecContext(ctx, "DELETE FROM users WHERE username = ?", username)
+	result, err := db.ExecContext(ctx, "UPDATE users SET deleted_at = ? WHERE username = ? AND deleted_at IS NULL", time.Now().Unix(), username)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("user @%s not found", username)
+	}
+
+	return nil
+}
+
+func restoreUser(ctx context.Context, username string) error {
+	username = strings.ToLower(username)
+	result, err := db.ExecContext(ctx, "UPDATE users SET deleted_at = NULL WHERE username = ?", username)
 	if err != nil {
 		return err
 	}
@@ -336,7 +371,7 @@ func ensureUserExists(ctx context.Context, username string) error {
 
 	username = strings.ToLower(username)
 	var exists bool
-	err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = ?)", username).Scan(&exists)
+	err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = ? AND deleted_at IS NULL)", username).Scan(&exists)
 	if err != nil {
 		return err
 	}
@@ -358,14 +393,14 @@ func setStravaName(ctx context.Context, username string, stravaName string) erro
 
 	// Check if user exists
 	var exists bool
-	err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = ?)", username).Scan(&exists)
+	err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = ? AND deleted_at IS NULL)", username).Scan(&exists)
 	if err != nil {
 		return fmt.Errorf("error checking user existence: %v", err)
 	}
 
 	if exists {
 		// Update existing user
-		_, err = db.ExecContext(ctx, "UPDATE users SET strava_name = ? WHERE username = ?", stravaName, username)
+		_, err = db.ExecContext(ctx, "UPDATE users SET strava_name = ? WHERE username = ? AND deleted_at IS NULL", stravaName, username)
 	} else {
 		nowSub3Days := time.Now().Add(3 * -24 * time.Hour).Unix()
 		// Create new user with strava_name
@@ -408,6 +443,7 @@ func main() {
 
 	setRegex := regexp.MustCompile(`^/set @(\w+) (.+)$`)
 	deleteRegex := regexp.MustCompile(`^/delete @(\w+)$`)
+	restoreRegex := regexp.MustCompile(`^/restore @(\w+)$`)
 	setoranRegex := regexp.MustCompile(`(?i).*(?:https://(?:strava\.app\.link/\w+|www\.strava\.com/activities/\d+)).*`)
 	urlRegex := regexp.MustCompile(`https://(?:strava\.app\.link/\w+|www\.strava\.com/activities/\d+)`)
 	nameRegex := regexp.MustCompile(`^/name @(\w+) (.+)$`)
@@ -456,7 +492,8 @@ func main() {
 				if update.Message.ReplyToMessage.MessageThreadId != threadID {
 					continue
 				}
-				if match := setByLinkRegex.FindStringSubmatch(text); match != nil { // set status
+
+				if match := setByLinkRegex.FindStringSubmatch(text); match != nil {
 					if !isAdmin(bot, chatID, userID) {
 						msg := tgbotapi.NewMessage(chatID, "You must be an admin to use this command.")
 						msg.MessageThreadId = update.Message.MessageThreadId
@@ -472,7 +509,7 @@ func main() {
 					meta, err := validateActivity(ctx, activityURL, username)
 					if err != nil {
 						log.Println("Error validating activity: ", err)
-						msg := tgbotapi.NewMessage(chatID, "Error validating activity.")
+						msg := tgbotapi.NewMessage(chatID, "Error validating activity. Error: "+err.Error())
 						msg.MessageThreadId = update.Message.MessageThreadId
 						bot.Send(msg)
 						continue
@@ -527,7 +564,29 @@ Foto Rute: %s`
 					continue
 				}
 
-				if match := setRegex.FindStringSubmatch(text); match != nil { // set status
+				if match := restoreRegex.FindStringSubmatch(text); match != nil {
+					if !isAdmin(bot, chatID, userID) {
+						msg := tgbotapi.NewMessage(chatID, "You must be an admin to use this command.")
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+						continue
+					}
+
+					username := match[1]
+					err := restoreUser(ctx, username)
+					if err != nil {
+						msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("Error: %v", err))
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+						continue
+					}
+					msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ User @%s telah direstore dari database", username))
+					msg.MessageThreadId = update.Message.MessageThreadId
+					bot.Send(msg)
+					continue
+				}
+
+				if match := setRegex.FindStringSubmatch(text); match != nil {
 					if !isAdmin(bot, chatID, userID) {
 						msg := tgbotapi.NewMessage(chatID, "You must be an admin to use this command.")
 						msg.MessageThreadId = update.Message.MessageThreadId
@@ -555,9 +614,10 @@ Foto Rute: %s`
 					msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Status @%s telah diset ke: %s", username, status.Format(timeFormat)))
 					msg.MessageThreadId = update.Message.MessageThreadId
 					bot.Send(msg)
+					continue
+				}
 
-					// delete
-				} else if match := deleteRegex.FindStringSubmatch(text); match != nil {
+				if match := deleteRegex.FindStringSubmatch(text); match != nil {
 					if !isAdmin(bot, chatID, userID) {
 						msg := tgbotapi.NewMessage(chatID, "You must be an admin to use this command.")
 						msg.MessageThreadId = update.Message.MessageThreadId
@@ -576,8 +636,10 @@ Foto Rute: %s`
 					msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ User @%s telah dihapus dari database", username))
 					msg.MessageThreadId = update.Message.MessageThreadId
 					bot.Send(msg)
+					continue
+				}
 
-				} else if text == "/stats" {
+				if text == "/stats" {
 					stats, err := getTopStats(ctx)
 					if err != nil {
 						msg := tgbotapi.NewMessage(chatID, "Error retrieving statistics.")
@@ -599,7 +661,10 @@ Foto Rute: %s`
 					msg := tgbotapi.NewMessage(chatID, messageText)
 					msg.MessageThreadId = update.Message.MessageThreadId
 					bot.Send(msg)
-				} else if match := nameRegex.FindStringSubmatch(text); match != nil {
+					continue
+				}
+
+				if match := nameRegex.FindStringSubmatch(text); match != nil {
 					if !isAdmin(bot, chatID, userID) {
 						msg := tgbotapi.NewMessage(chatID, "You must be an admin to use this command.")
 						msg.MessageThreadId = update.Message.MessageThreadId
@@ -620,17 +685,23 @@ Foto Rute: %s`
 					msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Strava name untuk @%s telah diupdate menjadi: %s", username, stravaName))
 					msg.MessageThreadId = update.Message.MessageThreadId
 					bot.Send(msg)
-				} else if text == "/help" {
+					continue
+				}
+
+				if text == "/help" {
 					helpText := `🤖 *Daftar Perintah*
 
 *Untuk Semua Pengguna:*
-• /stats - Tampilkan 10 pengguna teratas yang belum SetoRan dalam waktu 3 hari atau lebih
+• /stats - Tampilkan daftar pengguna yang belum SetoRan dalam waktu 3 hari atau lebih
+• /help - Tampilkan pesan bantuan ini
 • Post link Strava - Reset status dengan mengirim link aktivitas Strava (maksimal 2 hari yang lalu)
 
 *Khusus Admin:*
-• /set @username <02 Jan 2006 15:04:05 MST> - Atur status pengguna ke angka tertentu
-• /name @username <nama\_strava> - Update nama Strava pengguna
+• /set @username <02 Jan 2006 15:04:05 MST> - Atur status pengguna ke waktu tertentu
+• /name @username <nama_strava> - Update nama Strava pengguna
 • /delete @username - Hapus pengguna dari database
+• /restore @username - Mengembalikan pengguna yang telah dihapus
+• /sbl @username <link_strava> - Reset status pengguna lain menggunakan link Strava
 
 Bot akan otomatis:
 • Mengirim pengingat pada jam 8 pagi WIB untuk pengguna dengan status ≥ 3 hari
@@ -641,14 +712,17 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 					msg.MessageThreadId = update.Message.MessageThreadId
 					msg.ParseMode = "Markdown"
 					bot.Send(msg)
-				} else if match := setoranRegex.FindString(text); match != "" {
+					continue
+				}
+
+				if match := setoranRegex.FindString(text); match != "" {
 					// Extract the URL using the global regex
 					activityURL := urlRegex.FindString(match)
 
 					meta, err := validateActivity(ctx, activityURL, username)
 					if err != nil {
 						log.Println("Error validating activity: ", err)
-						msg := tgbotapi.NewMessage(chatID, "Error validating activity.")
+						msg := tgbotapi.NewMessage(chatID, "Error validating activity. Error: "+err.Error())
 						msg.MessageThreadId = update.Message.MessageThreadId
 						bot.Send(msg)
 						continue
@@ -697,6 +771,7 @@ Foto Rute: %s
 						msg.MessageThreadId = update.Message.MessageThreadId
 						bot.Send(msg)
 					}
+					continue
 				}
 			}
 		}
@@ -740,7 +815,7 @@ func ExtractStravaActivityURL(shareableURL string) (string, error) {
 
 func validateActivity(ctx context.Context, activityURL string, username string) (meta *Activity, err error) {
 	username = strings.ToLower(username)
-	row := db.QueryRowContext(ctx, "SELECT strava_name FROM users WHERE username = ?", username)
+	row := db.QueryRowContext(ctx, "SELECT strava_name FROM users WHERE username = ? AND deleted_at IS NULL", username)
 	var stravaName string
 	err = row.Scan(&stravaName)
 	if err != nil {
