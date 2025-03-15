@@ -11,7 +11,7 @@ import (
 
 func TestValidateActivity(t *testing.T) {
 	// Test the validateActivity function
-	meta, err := crawlling("https://www.strava.com/activities/13803183213", "DZulkifli DZulkifli")
+	meta, err := crawlling("https://www.strava.com/activities/13803183213", "DZulkifli DZulkifli", "1234567890")
 
 	if err != nil || meta == nil {
 		t.Fatal(err)
@@ -28,7 +28,7 @@ func TestValidateActivity(t *testing.T) {
 	assert.NotNil(t, meta, "Expected activity to be valid")
 
 	// Test the validateActivity function
-	meta, err = crawlling("https://www.strava.com/activities/13803686366", "herpiko dwi aguno")
+	meta, err = crawlling("https://www.strava.com/activities/13803686366", "herpiko dwi aguno", "1234567890")
 
 	if err != nil || meta == nil {
 		t.Fatal(err)
@@ -45,7 +45,7 @@ func TestValidateActivity(t *testing.T) {
 	assert.NotNil(t, meta, "Expected activity to be valid")
 
 	// Test the validateActivity function
-	meta, err = crawlling("https://www.strava.com/activities/13798765328", "Lalu Erfandi Maula Yusnu")
+	meta, err = crawlling("https://www.strava.com/activities/13798765328", "Lalu Erfandi Maula Yusnu", "1234567890")
 
 	if err != nil || meta == nil {
 		t.Fatal(err)

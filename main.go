@@ -99,6 +99,17 @@ func initDB() {
 	if err != nil {
 		log.Println("Error adding username_deleted_at index:", err)
 	}
+
+	query = `ALTER TABLE users ADD COLUMN strava_id_text TEXT;`
+	_, err = db.Exec(query)
+	if err != nil {
+		log.Println("Error adding strava_id_text field:", err)
+	}
+	query = `CREATE UNIQUE INDEX IF NOT EXISTS idx_strava_id_text ON users (strava_id_text);`
+	_, err = db.Exec(query)
+	if err != nil {
+		log.Println("Error adding strava_id_text index:", err)
+	}
 }
 
 func resetStatus(ctx context.Context, username string, status int) error {
@@ -160,18 +171,7 @@ func notifyHighStatusUsers(ctx context.Context, bot *tgbotapi.BotAPI) {
 		remainingHours := int(dif.Hours()) % 24
 		remainingSeconds := int(dif.Seconds()) % 3600 % 60
 
-		if remainingHours > 0 {
-			duration := fmt.Sprintf("%d hari %d jam %d detik", days, remainingHours, remainingSeconds)
-			pemalas = append(pemalas, fmt.Sprintf("@%s: %s", username, duration))
-			continue
-		}
-		if remainingSeconds > 0 {
-			duration := fmt.Sprintf("%d hari %d detik", days, remainingSeconds)
-			pemalas = append(pemalas, fmt.Sprintf("@%s: %s", username, duration))
-			continue
-		}
-
-		duration := fmt.Sprintf("%d hari", days)
+		duration := fmt.Sprintf("%d hari %d jam %d detik", days, remainingHours, remainingSeconds)
 
 		pemalas = append(pemalas, fmt.Sprintf("@%s: %s", username, duration))
 	}
@@ -284,18 +284,7 @@ func getTopStats(ctx context.Context) ([]string, error) {
 		remainingHours := int(dif.Hours()) % 24
 		remainingSeconds := int(dif.Seconds()) % 3600 % 60
 
-		if remainingHours > 0 {
-			duration := fmt.Sprintf("%d hari %d jam %d detik", days, remainingHours, remainingSeconds)
-			stats = append(stats, fmt.Sprintf("@%s: %s", username, duration))
-			continue
-		}
-		if remainingSeconds > 0 {
-			duration := fmt.Sprintf("%d hari %d detik", days, remainingSeconds)
-			stats = append(stats, fmt.Sprintf("@%s: %s", username, duration))
-			continue
-		}
-
-		duration := fmt.Sprintf("%d hari", days)
+		duration := fmt.Sprintf("%d hari %d jam %d detik", days, remainingHours, remainingSeconds)
 
 		stats = append(stats, fmt.Sprintf("@%s: %s", username, duration))
 	}
@@ -413,6 +402,31 @@ func setStravaName(ctx context.Context, username string, stravaName string) erro
 	return nil
 }
 
+func setStravaID(ctx context.Context, username string, stravaID string) error {
+	username = strings.ToLower(username)
+
+	// Check if user exists
+	var exists bool
+	err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE username = ? AND deleted_at IS NULL)", username).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("error checking user existence: %v", err)
+	}
+
+	if exists {
+		// Update existing user
+		_, err = db.ExecContext(ctx, "UPDATE users SET strava_id_text = ? WHERE username = ? AND deleted_at IS NULL", stravaID, username)
+	} else {
+		nowSub3Days := time.Now().Add(3 * -24 * time.Hour).Unix()
+		// Create new user with strava_name
+		_, err = db.ExecContext(ctx, "INSERT INTO users (username, strava_id_text, status) VALUES (?, ?, ?)", username, stravaID, nowSub3Days)
+	}
+
+	if err != nil {
+		return fmt.Errorf("error setting strava id: %v", err)
+	}
+	return nil
+}
+
 const timeFormat = "02 Jan 2006 15:04:05 MST"
 
 func main() {
@@ -447,6 +461,7 @@ func main() {
 	setoranRegex := regexp.MustCompile(`(?i).*(?:https://(?:strava\.app\.link/\w+|www\.strava\.com/activities/\d+)).*`)
 	urlRegex := regexp.MustCompile(`https://(?:strava\.app\.link/\w+|www\.strava\.com/activities/\d+)`)
 	nameRegex := regexp.MustCompile(`^/name @(\w+) (.+)$`)
+	idRegex := regexp.MustCompile(`^/id @(\w+) (\d+)$`)
 	setByLinkRegex := regexp.MustCompile(`^/sbl @(\w+) (.+)$`)
 
 	// Create a channel to signal when message processing is done
@@ -688,6 +703,29 @@ Foto Rute: %s`
 					continue
 				}
 
+				if match := idRegex.FindStringSubmatch(text); match != nil {
+					if !isAdmin(bot, chatID, userID) {
+						msg := tgbotapi.NewMessage(chatID, "You must be an admin to use this command.")
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+						continue
+					}
+
+					username := match[1] // First capture group: the username
+					stravaID := match[2] // Second capture group: the Strava name
+
+					if err := setStravaID(ctx, username, stravaID); err != nil {
+						msg := tgbotapi.NewMessage(chatID, "Error updating Strava id.")
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+						continue
+					}
+
+					msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Strava id untuk @%s telah diupdate menjadi: %s", username, stravaID))
+					msg.MessageThreadId = update.Message.MessageThreadId
+					bot.Send(msg)
+					continue
+				}
 				if text == "/help" {
 					helpText := `🤖 *Daftar Perintah*
 
@@ -815,17 +853,18 @@ func ExtractStravaActivityURL(shareableURL string) (string, error) {
 
 func validateActivity(ctx context.Context, activityURL string, username string) (meta *Activity, err error) {
 	username = strings.ToLower(username)
-	row := db.QueryRowContext(ctx, "SELECT strava_name FROM users WHERE username = ? AND deleted_at IS NULL", username)
-	var stravaName string
-	err = row.Scan(&stravaName)
+	row := db.QueryRowContext(ctx, "SELECT strava_name, strava_id_text FROM users WHERE username = ? AND deleted_at IS NULL", username)
+	var stravaName sql.NullString
+	var stravaID sql.NullString
+	err = row.Scan(&stravaName, &stravaID)
 	if err != nil {
 		return
 	}
 
-	return crawlling(activityURL, stravaName)
+	return crawlling(activityURL, stravaName.String, stravaID.String)
 }
 
-func crawlling(activityURL, stravaName string) (meta *Activity, err error) {
+func crawlling(activityURL, stravaName string, stravaID string) (meta *Activity, err error) {
 	c2 := colly.NewCollector(
 		colly.AllowedDomains("www.strava.com"),
 	)
@@ -843,8 +882,13 @@ func crawlling(activityURL, stravaName string) (meta *Activity, err error) {
 			return
 		}
 
-		if stravaName != fmt.Sprintf("%s %s", data.Props.PageProps.Activity.Athlete.FirstName, data.Props.PageProps.Activity.Athlete.LastName) {
+		if stravaID == "" && stravaName != fmt.Sprintf("%s %s", data.Props.PageProps.Activity.Athlete.FirstName, data.Props.PageProps.Activity.Athlete.LastName) {
 			err = fmt.Errorf("strava name not match")
+			return
+		}
+
+		if stravaID != "" && stravaID != data.Props.PageProps.Activity.Athlete.ID {
+			err = fmt.Errorf("strava id not match")
 			return
 		}
 
