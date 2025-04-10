@@ -169,9 +169,10 @@ func notifyHighStatusUsers(ctx context.Context, bot *tgbotapi.BotAPI) {
 
 		days := int(dif.Hours() / 24)
 		remainingHours := int(dif.Hours()) % 24
-		remainingSeconds := int(dif.Seconds()) % 3600 % 60
+		remainingMinutes := int(dif.Minutes()) % 60
+		remainingSeconds := int(dif.Seconds()) % 60
 
-		duration := fmt.Sprintf("%d hari %d jam %d detik", days, remainingHours, remainingSeconds)
+		duration := fmt.Sprintf("%d hari %d jam %d menit %d detik", days, remainingHours, remainingMinutes, remainingSeconds)
 
 		pemalas = append(pemalas, fmt.Sprintf("@%s: %s", username, duration))
 	}
@@ -282,9 +283,10 @@ func getTopStats(ctx context.Context) ([]string, error) {
 
 		days := int(dif.Hours() / 24)
 		remainingHours := int(dif.Hours()) % 24
-		remainingSeconds := int(dif.Seconds()) % 3600 % 60
+		remainingMinutes := int(dif.Minutes()) % 60
+		remainingSeconds := int(dif.Seconds()) % 60
 
-		duration := fmt.Sprintf("%d hari %d jam %d detik", days, remainingHours, remainingSeconds)
+		duration := fmt.Sprintf("%d hari %d jam %d menit %d detik", days, remainingHours, remainingMinutes, remainingSeconds)
 
 		stats = append(stats, fmt.Sprintf("@%s: %s", username, duration))
 	}
