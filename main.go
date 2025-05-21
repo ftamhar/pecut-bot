@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -483,6 +484,15 @@ func main() {
 					continue
 				}
 
+				if strings.Contains(update.Message.Text, "https://www.instagram.com/") {
+					ddinstagramURL := ConvertToDDInstagramURL(update.Message.Text)
+
+					msg := tgbotapi.NewMessage(chatID, ddinstagramURL)
+					msg.MessageThreadId = update.Message.MessageThreadId
+					bot.Send(msg)
+					continue
+				}
+
 				if chatID != update.Message.Chat.ID {
 					continue
 				}
@@ -715,6 +725,7 @@ Foto Rute: %s`
 					stravaID := match[2] // Second capture group: the Strava name
 
 					if err := setStravaID(ctx, username, stravaID); err != nil {
+						log.Println("Error updating Strava id: ", err)
 						msg := tgbotapi.NewMessage(chatID, "Error updating Strava id.")
 						msg.MessageThreadId = update.Message.MessageThreadId
 						bot.Send(msg)
@@ -1012,4 +1023,22 @@ func GetPacePerKm(seconds int, distanceKm float64) (minutes int, remainingSecond
 	remainingSeconds = int(math.Round(secondsPerKm)) % 60
 
 	return minutes, remainingSeconds
+}
+
+func ConvertToDDInstagramURL(instagramURL string) string {
+	// Regular expression to match any Instagram content URLs
+	var re *regexp.Regexp
+
+	sync.OnceFunc(func() {
+		re = regexp.MustCompile(`https?://(?:www\.)?instagram\.com/([^/?]+)/([^/?]+)`)
+	})()
+
+	// Find the content type and ID
+	matches := re.FindStringSubmatch(instagramURL)
+	if len(matches) < 2 {
+		return instagramURL // Return original URL if no match found
+	}
+
+	// Construct the ddinstagram URL
+	return fmt.Sprintf("https://www.ddinstagram.com/%s", strings.Join(matches[1:], "/"))
 }
