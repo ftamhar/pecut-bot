@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"regexp"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -1026,19 +1025,21 @@ func GetPacePerKm(seconds int, distanceKm float64) (minutes int, remainingSecond
 }
 
 func ConvertToDDInstagramURL(instagramURL string) string {
-	// Regular expression to match any Instagram content URLs
-	var re *regexp.Regexp
+	// Replace instagram with ddinstagram
+	url := strings.Replace(instagramURL, "instagram.com", "ddinstagram.com", 1)
 
-	sync.OnceFunc(func() {
-		re = regexp.MustCompile(`https?://(?:www\.)?instagram\.com/([^/?]+)/([^/?]+)`)
-	})()
-
-	// Find the content type and ID
-	matches := re.FindStringSubmatch(instagramURL)
-	if len(matches) < 2 {
-		return instagramURL // Return original URL if no match found
+	// Remove everything before https://www.ddinstagram.com
+	if idx := strings.Index(url, "https://www.ddinstagram.com"); idx != -1 {
+		url = "Bismillah, Semoga Berhasil: " + url[idx:]
 	}
 
-	// Construct the ddinstagram URL
-	return fmt.Sprintf("https://www.ddinstagram.com/%s", strings.Join(matches[1:], "/"))
+	// Remove everything after ?
+	if idx := strings.Index(url, "?"); idx != -1 {
+		if url[idx-1] == '/' {
+			return url[:idx-1]
+		}
+		return url[:idx]
+	}
+
+	return url
 }
