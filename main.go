@@ -485,6 +485,9 @@ func main() {
 
 				if strings.Contains(update.Message.Text, "https://www.instagram.com/") {
 					ddinstagramURL := ConvertToDDInstagramURL(update.Message.Text)
+					if ddinstagramURL == "" {
+						continue
+					}
 
 					msg := tgbotapi.NewMessage(chatID, ddinstagramURL)
 					msg.MessageThreadId = update.Message.MessageThreadId
@@ -1024,9 +1027,9 @@ func GetPacePerKm(seconds int, distanceKm float64) (minutes int, remainingSecond
 	return minutes, remainingSeconds
 }
 
-func ConvertToDDInstagramURL(instagramURL string) string {
+func ConvertToDDInstagramURL(instagramURL string) (url string) {
 	// Replace instagram with ddinstagram
-	url := strings.Replace(instagramURL, "instagram.com", "ddinstagram.com", 1)
+	url = strings.Replace(instagramURL, "instagram.com", "ddinstagram.com", 1)
 
 	// Remove everything before https://www.ddinstagram.com
 	if idx := strings.Index(url, "https://www.ddinstagram.com"); idx != -1 {
@@ -1036,9 +1039,22 @@ func ConvertToDDInstagramURL(instagramURL string) string {
 	// Remove everything after ?
 	if idx := strings.Index(url, "?"); idx != -1 {
 		if url[idx-1] == '/' {
-			return url[:idx-1]
+			url = url[:idx-1]
+
+			ss := strings.Split(strings.Replace(url, "Bismillah, Semoga Berhasil: https://", "", 1), "/")
+			if len(ss) == 2 {
+				return ""
+			}
+			return
 		}
-		return url[:idx]
+
+		url = url[:idx]
+
+		ss := strings.Split(strings.Replace(url, "Bismillah, Semoga Berhasil: https://", "", 1), "/")
+		if len(ss) == 2 {
+			return ""
+		}
+		return
 	}
 
 	return url
