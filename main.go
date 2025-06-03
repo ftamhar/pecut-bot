@@ -1033,7 +1033,7 @@ func ConvertToDDInstagramURL(instagramURL string) (url string) {
 
 	// Remove everything before https://www.ddinstagram.com
 	if idx := strings.Index(url, "https://www.ddinstagram.com"); idx != -1 {
-		url = "Bismillah, Semoga Berhasil: " + url[idx:]
+		url = "Preview: " + url[idx:]
 	}
 
 	// Remove everything after ?
@@ -1041,7 +1041,7 @@ func ConvertToDDInstagramURL(instagramURL string) (url string) {
 		if url[idx-1] == '/' {
 			url = url[:idx-1]
 
-			ss := strings.Split(strings.Replace(url, "Bismillah, Semoga Berhasil: https://", "", 1), "/")
+			ss := strings.Split(strings.Replace(url, "Preview: https://", "", 1), "/")
 			if len(ss) == 2 {
 				return ""
 			}
@@ -1050,7 +1050,7 @@ func ConvertToDDInstagramURL(instagramURL string) (url string) {
 
 		url = url[:idx]
 
-		ss := strings.Split(strings.Replace(url, "Bismillah, Semoga Berhasil: https://", "", 1), "/")
+		ss := strings.Split(strings.Replace(url, "Preview: https://", "", 1), "/")
 		if len(ss) == 2 {
 			return ""
 		}
