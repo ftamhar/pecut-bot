@@ -495,6 +495,18 @@ func main() {
 					continue
 				}
 
+				if strings.Contains(update.Message.Text, "https://x.com/") {
+					vxtwitterURL := ConvertToVXTwitterURL(update.Message.Text)
+					if vxtwitterURL == "" {
+						continue
+					}
+
+					msg := tgbotapi.NewMessage(chatID, vxtwitterURL)
+					msg.MessageThreadId = update.Message.MessageThreadId
+					bot.Send(msg)
+					continue
+				}
+
 				if chatID != update.Message.Chat.ID {
 					continue
 				}
@@ -1057,5 +1069,38 @@ func ConvertToDDInstagramURL(instagramURL string) (url string) {
 		return
 	}
 
-	return url
+	return
+}
+
+func ConvertToVXTwitterURL(twitterURL string) (url string) {
+	// Replace x.com with vxtwitter.com
+	url = strings.Replace(twitterURL, "x.com", "vxtwitter.com", 1)
+
+	// Remove everything before https://www.vxtwitter.com
+	if idx := strings.Index(url, "https://www.vxtwitter.com"); idx != -1 {
+		url = "Preview: " + url[idx:]
+	}
+
+	// Remove everything after ?
+	if idx := strings.Index(url, "?"); idx != -1 {
+		if url[idx-1] == '/' {
+			url = url[:idx-1]
+
+			ss := strings.Split(strings.Replace(url, "Preview: https://", "", 1), "/")
+			if len(ss) == 2 {
+				return ""
+			}
+			return
+		}
+
+		url = url[:idx]
+
+		ss := strings.Split(strings.Replace(url, "Preview: https://", "", 1), "/")
+		if len(ss) == 2 {
+			return ""
+		}
+		return
+	}
+
+	return
 }
