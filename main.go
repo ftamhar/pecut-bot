@@ -110,9 +110,15 @@ func initDB() {
 	if err != nil {
 		log.Println("Error adding strava_id_text index:", err)
 	}
+
+	query = `ALTER TABLE users ADD COLUMN distance FLOAT NOT NULL DEFAULT 0;`
+	_, err = db.Exec(query)
+	if err != nil {
+		log.Println("Error adding distance field:", err)
+	}
 }
 
-func resetStatus(ctx context.Context, username string, status int) error {
+func resetStatus(ctx context.Context, username string, status int, distance float64) error {
 	username = strings.ToLower(username)
 
 	var exists bool
@@ -122,9 +128,9 @@ func resetStatus(ctx context.Context, username string, status int) error {
 	}
 
 	if exists {
-		_, err = db.ExecContext(ctx, "UPDATE users SET status = ? WHERE username = ? AND deleted_at IS NULL", status, username)
+		_, err = db.ExecContext(ctx, "UPDATE users SET status = ? , distance = distance + ? WHERE username = ? AND deleted_at IS NULL", status, distance, username)
 	} else {
-		_, err = db.ExecContext(ctx, "INSERT INTO users (username, status) VALUES (?, ?)", username, status)
+		_, err = db.ExecContext(ctx, "INSERT INTO users (username, status, distance) VALUES (?, ?, ?)", username, status, distance)
 	}
 
 	return err
@@ -219,6 +225,17 @@ func startDailyIncrementJob(ctx context.Context, bot *tgbotapi.BotAPI) *cron.Cro
 	})
 	if err != nil {
 		log.Fatal("Failed to schedule notification cron job:", err)
+	}
+
+	// 00:05 AM every monday job to reset distance
+	_, err = c.AddFunc("5 0 * * 1", func() {
+		_, err = db.ExecContext(ctx, "UPDATE users SET distance = 0 WHERE deleted_at IS NULL")
+		if err != nil {
+			log.Println("Error resetting distance:", err)
+		}
+	})
+	if err != nil {
+		log.Fatal("Failed to schedule distance reset cron job:", err)
 	}
 
 	c.Start()
@@ -555,7 +572,7 @@ func main() {
 					}
 
 					if meta != nil {
-						err := resetStatus(ctx, username, meta.Status)
+						err := resetStatus(ctx, username, meta.Status, meta.DistanceMeter/1000)
 						if err != nil {
 							msg := tgbotapi.NewMessage(chatID, "Error resetting status.")
 							msg.MessageThreadId = update.Message.MessageThreadId
@@ -703,6 +720,21 @@ Foto Rute: %s`
 					continue
 				}
 
+				if text == "/distances" {
+					msgText, err := getDistance(ctx)
+					if err != nil {
+						msg := tgbotapi.NewMessage(chatID, "Error retrieving distance.")
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+						continue
+					}
+
+					msg := tgbotapi.NewMessage(chatID, msgText)
+					msg.MessageThreadId = update.Message.MessageThreadId
+					bot.Send(msg)
+					continue
+				}
+
 				if match := nameRegex.FindStringSubmatch(text); match != nil {
 					if !isAdmin(bot, chatID, userID) {
 						msg := tgbotapi.NewMessage(chatID, "You must be an admin to use this command.")
@@ -793,7 +825,7 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 
 					if meta != nil {
 						username := update.Message.From.UserName
-						err := resetStatus(ctx, username, meta.Status)
+						err := resetStatus(ctx, username, meta.Status, meta.DistanceMeter/1000)
 						if err != nil {
 							msg := tgbotapi.NewMessage(chatID, "Error resetting status.")
 							msg.MessageThreadId = update.Message.MessageThreadId
@@ -951,6 +983,12 @@ func crawlling(activityURL, stravaName string, stravaID string) (meta *Activity,
 			Status:        int(t.Unix()) + data.Props.PageProps.Activity.Scalars.MovingTime,
 			TimeZone:      timeZone,
 		}
+
+		nowYear, nowWeek := time.Now().ISOWeek()
+		tYear, tWeek := t.ISOWeek()
+		if tYear != nowYear || tWeek != nowWeek {
+			meta.DistanceMeter = 0
+		}
 	})
 
 	if strings.Contains(activityURL, "www.strava.com") {
@@ -1102,5 +1140,59 @@ func ConvertToVXTwitterURL(twitterURL string) (url string) {
 		return
 	}
 
+	return
+}
+
+func getDistance(ctx context.Context) (msg string, err error) {
+
+	rows, err := db.QueryContext(ctx, "SELECT username, distance FROM users WHERE deleted_at IS NULL ORDER BY distance DESC")
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	var first float64
+	var count int
+
+	msg = "Distance:\n"
+
+	for rows.Next() {
+		var username string
+		var distance float64
+		err = rows.Scan(&username, &distance)
+		if err != nil {
+			return
+		}
+		if first == 0 {
+			first = distance
+		}
+		// add message like bar based on percentage from first person
+		percentage := distance / first
+		bar := fmt.Sprintf("|%s|", strings.Repeat("=", int(percentage*10)))
+		msg += fmt.Sprintf("%s @%s: %.02fkm", bar, username, distance)
+		count++
+
+		if count == 1 {
+			msg += " (🏆)"
+		}
+
+		if count == 2 {
+			msg += " (🥈)"
+		}
+
+		if count == 3 {
+			msg += " (🥉)"
+		}
+
+		if count > 3 && distance > 0 {
+			msg += " (🏃)"
+		}
+
+		if distance == 0 {
+			msg += " (🐌)"
+		}
+
+		msg += "\n"
+	}
 	return
 }
