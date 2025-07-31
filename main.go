@@ -111,7 +111,7 @@ func initDB() {
 		log.Println("Error adding strava_id_text index:", err)
 	}
 
-	query = `ALTER TABLE users ADD COLUMN distance FLOAT NOT NULL DEFAULT 0;`
+	query = `ALTER TABLE users ADD COLUMN distance NUMERIC NOT NULL DEFAULT 0;`
 	_, err = db.Exec(query)
 	if err != nil {
 		log.Println("Error adding distance field:", err)
@@ -1144,8 +1144,7 @@ func ConvertToVXTwitterURL(twitterURL string) (url string) {
 }
 
 func getDistance(ctx context.Context) (msg string, err error) {
-
-	rows, err := db.QueryContext(ctx, "SELECT username, distance FROM users WHERE deleted_at IS NULL ORDER BY distance DESC")
+	rows, err := db.QueryContext(ctx, "SELECT username, distance FROM users WHERE deleted_at IS NULL and distance > 0 ORDER BY distance DESC")
 	if err != nil {
 		return
 	}
@@ -1168,7 +1167,11 @@ func getDistance(ctx context.Context) (msg string, err error) {
 		}
 		// add message like bar based on percentage from first person
 		percentage := distance / first
-		bar := fmt.Sprintf("|%s|", strings.Repeat("=", int(percentage*10)))
+		multiple := int(percentage * 10)
+		if multiple < 0 {
+			multiple = 0
+		}
+		bar := fmt.Sprintf("|%s|", strings.Repeat("=", multiple))
 		msg += fmt.Sprintf("%s @%s: %.02fkm", bar, username, distance)
 		count++
 
@@ -1184,12 +1187,8 @@ func getDistance(ctx context.Context) (msg string, err error) {
 			msg += " (🥉)"
 		}
 
-		if count > 3 && distance > 0 {
+		if count > 3 {
 			msg += " (🏃)"
-		}
-
-		if distance == 0 {
-			msg += " (🐌)"
 		}
 
 		msg += "\n"
