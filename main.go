@@ -229,6 +229,17 @@ func startDailyIncrementJob(ctx context.Context, bot *tgbotapi.BotAPI) *cron.Cro
 
 	// 00:05 AM every monday job to reset distance
 	_, err = c.AddFunc("5 0 * * 1", func() {
+		msgText, err := getDistance(ctx, true)
+		if err != nil {
+			msg := tgbotapi.NewMessage(chatID, "Error retrieving distance.")
+			msg.MessageThreadId = threadID
+			bot.Send(msg)
+		}
+
+		msg := tgbotapi.NewMessage(chatID, msgText)
+		msg.MessageThreadId = threadID
+		bot.Send(msg)
+
 		_, err = db.ExecContext(ctx, "UPDATE users SET distance = 0 WHERE deleted_at IS NULL")
 		if err != nil {
 			log.Println("Error resetting distance:", err)
@@ -721,7 +732,7 @@ Foto Rute: %s`
 				}
 
 				if text == "/distances" {
-					msgText, err := getDistance(ctx)
+					msgText, err := getDistance(ctx, false)
 					if err != nil {
 						msg := tgbotapi.NewMessage(chatID, "Error retrieving distance.")
 						msg.MessageThreadId = update.Message.MessageThreadId
@@ -1143,7 +1154,7 @@ func ConvertToVXTwitterURL(twitterURL string) (url string) {
 	return
 }
 
-func getDistance(ctx context.Context) (msg string, err error) {
+func getDistance(ctx context.Context, isFInal bool) (msg string, err error) {
 	rows, err := db.QueryContext(ctx, "SELECT username, distance FROM users WHERE deleted_at IS NULL and distance > 0 ORDER BY distance DESC")
 	if err != nil {
 		return
@@ -1154,6 +1165,9 @@ func getDistance(ctx context.Context) (msg string, err error) {
 	var count int
 
 	msg = "Distance:\n"
+	if isFInal {
+		msg = "Distance Final:\n"
+	}
 
 	for rows.Next() {
 		var username string
