@@ -127,6 +127,13 @@ func resetStatus(ctx context.Context, username string, status int, distance floa
 		return err
 	}
 
+	nowYear, nowWeek := time.Now().ISOWeek()
+	tYear, tWeek := time.Unix(int64(status), 0).ISOWeek()
+
+	if nowYear != tYear || nowWeek != tWeek {
+		distance = 0
+	}
+
 	if exists {
 		_, err = db.ExecContext(ctx, "UPDATE users SET status = ? , distance = distance + ? WHERE username = ? AND deleted_at IS NULL", status, distance, username)
 	} else {
@@ -993,12 +1000,6 @@ func crawlling(activityURL, stravaName string, stravaID string) (meta *Activity,
 			ImageUrl:      imgLocation,
 			Status:        int(t.Unix()) + data.Props.PageProps.Activity.Scalars.MovingTime,
 			TimeZone:      timeZone,
-		}
-
-		nowYear, nowWeek := time.Now().ISOWeek()
-		tYear, tWeek := t.ISOWeek()
-		if tYear != nowYear || tWeek != nowWeek {
-			meta.DistanceMeter = 0
 		}
 	})
 
