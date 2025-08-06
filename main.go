@@ -590,7 +590,12 @@ func main() {
 					}
 
 					if meta != nil {
-						err := resetStatus(ctx, username, meta.Status, meta.DistanceMeter/1000)
+						distance := meta.DistanceMeter / 1000
+						if meta.SportType != "Run" {
+							distance = 0
+						}
+
+						err := resetStatus(ctx, username, meta.Status, distance)
 						if err != nil {
 							msg := tgbotapi.NewMessage(chatID, "Error resetting status.")
 							msg.MessageThreadId = update.Message.MessageThreadId
@@ -843,7 +848,12 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 
 					if meta != nil {
 						username := update.Message.From.UserName
-						err := resetStatus(ctx, username, meta.Status, meta.DistanceMeter/1000)
+
+						distance := meta.DistanceMeter / 1000
+						if meta.SportType != "Run" {
+							distance = 0
+						}
+						err := resetStatus(ctx, username, meta.Status, distance)
 						if err != nil {
 							msg := tgbotapi.NewMessage(chatID, "Error resetting status.")
 							msg.MessageThreadId = update.Message.MessageThreadId
@@ -1000,6 +1010,7 @@ func crawlling(activityURL, stravaName string, stravaID string) (meta *Activity,
 			ImageUrl:      imgLocation,
 			Status:        int(t.Unix()) + data.Props.PageProps.Activity.Scalars.MovingTime,
 			TimeZone:      timeZone,
+			SportType:     data.Props.PageProps.Activity.ActivityKind.SportType,
 		}
 	})
 

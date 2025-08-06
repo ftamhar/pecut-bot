@@ -9,14 +9,18 @@ type Activity struct {
 	Pace          string
 	ImageUrl      string
 
-	Status   int
-	TimeZone string
+	Status    int
+	TimeZone  string
+	SportType string
 }
 
 type ResponseJson struct {
 	Props struct {
 		PageProps struct {
 			Activity struct {
+				ActivityKind struct {
+					SportType string `json:"sportType"`
+				} `json:"activityKind"`
 				MapImages []struct {
 					URL string `json:"url"`
 				} `json:"mapImages"`
