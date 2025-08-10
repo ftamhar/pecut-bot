@@ -1198,7 +1198,7 @@ func getDistance(ctx context.Context, isFInal bool) (msg string, err error) {
 			multiple = 0
 		}
 		bar := fmt.Sprintf("|%s|", strings.Repeat("=", multiple))
-		msg += fmt.Sprintf("%s @%s: %.02fkm", bar, username, distance)
+		msg += fmt.Sprintf("%s %s: %.02fkm", bar, username, distance)
 		count++
 
 		if count == 1 {
