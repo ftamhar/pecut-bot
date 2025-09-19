@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -464,6 +465,9 @@ func setStravaID(ctx context.Context, username string, stravaID string) error {
 
 const timeFormat = "02 Jan 2006 15:04:05 MST"
 
+var previewIgURL = "instagramez.com"
+var previewIgUrlMtx sync.RWMutex
+
 func main() {
 	initDB()
 	defer db.Close()
@@ -498,6 +502,7 @@ func main() {
 	nameRegex := regexp.MustCompile(`^/name @(\w+) (.+)$`)
 	idRegex := regexp.MustCompile(`^/id @(\w+) (\d+)$`)
 	setByLinkRegex := regexp.MustCompile(`^/sbl @(\w+) (.+)$`)
+	ig := regexp.MustCompile(`^/ig ([a-z.]+)$`)
 
 	// Create a channel to signal when message processing is done
 	done := make(chan struct{})
@@ -640,6 +645,23 @@ Foto Rute: %s`
 						bot.Send(msg)
 					}
 
+					continue
+				}
+
+				if match := ig.FindStringSubmatch(text); match != nil {
+					if !isAdmin(bot, chatID, userID) {
+						msg := tgbotapi.NewMessage(chatID, "You must be an admin to use this command.")
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+						continue
+					}
+
+					previewIgUrlMtx.Lock()
+					previewIgURL = match[1]
+					msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Preview Instagram URL telah diupdate menjadi: %s", previewIgURL))
+					msg.MessageThreadId = update.Message.MessageThreadId
+					bot.Send(msg)
+					previewIgUrlMtx.Unlock()
 					continue
 				}
 
@@ -1101,11 +1123,18 @@ func GetPacePerKm(seconds int, distanceKm float64) (minutes int, remainingSecond
 }
 
 func ConvertToDDInstagramURL(instagramURL string) (url string) {
+	previewIgUrlMtx.RLock()
+	previewIgURL := previewIgURL
+	previewIgUrlMtx.RUnlock()
 	// Replace instagram with ddinstagram
-	url = strings.Replace(instagramURL, "instagram.com", "ddinstagram.com", 1)
+	url = strings.Replace(instagramURL, "instagram.com", previewIgURL, 1)
+	var prefix string
+	if !strings.HasPrefix(previewIgURL, "www.") {
+		prefix = "www."
+	}
 
-	// Remove everything before https://www.ddinstagram.com
-	if idx := strings.Index(url, "https://www.ddinstagram.com"); idx != -1 {
+	// Remove everything before https://www.instagramez.com
+	if idx := strings.Index(url, "https://"+prefix+previewIgURL); idx != -1 {
 		url = "Preview: " + url[idx:]
 	}
 
@@ -1176,9 +1205,9 @@ func getDistance(ctx context.Context, isFInal bool) (msg string, err error) {
 	var first float64
 	var count int
 
-	msg = "Distance:\n"
+	msg = "🏃 SIAPA YANG PALING JAUH MINGGU INI? INI DIA RANKINGNYA! 🏃\n"
 	if isFInal {
-		msg = "Distance Final:\n"
+		msg = "🏁 FINAL DISTANCE - HASIL AKHIR MINGGU INI 🏁\n"
 	}
 
 	for rows.Next() {
