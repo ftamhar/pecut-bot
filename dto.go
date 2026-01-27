@@ -1,11 +1,12 @@
 package main
 
 type Activity struct {
+	ActivityID    string
 	ActivityDate  string
 	ActivityName  string
 	DistanceMeter float64
 	Time          string
-	Elevation     float64
+	ElevationGain float64
 	Pace          string
 	ImageUrl      string
 
@@ -18,6 +19,7 @@ type ResponseJson struct {
 	Props struct {
 		PageProps struct {
 			Activity struct {
+				ID           string `json:"id"`
 				ActivityKind struct {
 					SportType string `json:"sportType"`
 				} `json:"activityKind"`

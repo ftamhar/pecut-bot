@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"math"
+	"net/http"
 	"os"
 	"os/signal"
 	"regexp"
@@ -18,6 +20,7 @@ import (
 
 	tgbotapi "github.com/egovorukhin/telebot-api"
 	"github.com/gocolly/colly"
+	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/ringsaturn/tzf"
 	"github.com/robfig/cron/v3"
@@ -117,9 +120,23 @@ func initDB() {
 	if err != nil {
 		log.Println("Error adding distance field:", err)
 	}
+
+	query = `ALTER TABLE users ADD COLUMN elevation_gain NUMERIC NOT NULL DEFAULT 0;`
+	_, err = db.Exec(query)
+	if err != nil {
+		log.Println("Error adding distance field:", err)
+	}
+
+	query = `ALTER TABLE users ADD COLUMN activity_ids TEXT NOT NULL DEFAULT '';`
+	_, err = db.Exec(query)
+	if err != nil {
+		log.Println("Error adding activity_ids field:", err)
+	}
 }
 
-func resetStatus(ctx context.Context, username string, status int, distance float64) error {
+var jakartaLocation *time.Location
+
+func resetStatus(ctx context.Context, username string, status int, meta Activity) error {
 	username = strings.ToLower(username)
 
 	var exists bool
@@ -128,17 +145,57 @@ func resetStatus(ctx context.Context, username string, status int, distance floa
 		return err
 	}
 
-	nowYear, nowWeek := time.Now().ISOWeek()
-	tYear, tWeek := time.Unix(int64(status), 0).ISOWeek()
+	sync.OnceFunc(func() {
+		jakartaLocation, err = time.LoadLocation("Asia/Jakarta")
+		if err != nil {
+			log.Fatal("Failed to load Jakarta timezone:", err)
+		}
+	})()
 
-	if nowYear != tYear || nowWeek != tWeek {
-		distance = 0
+	nowYear, nowWeek := time.Now().In(jakartaLocation).ISOWeek()
+	tYear, tWeek := time.Unix(int64(status), 0).In(jakartaLocation).ISOWeek()
+
+	sportType := meta.SportType
+
+	isRunning := true
+	if nowYear != tYear || nowWeek != tWeek || (sportType != "Run" && sportType != "TrailRun" && sportType != "Walk") {
+		meta.DistanceMeter = 0.0
+		meta.ElevationGain = 0.0
+		isRunning = false
 	}
 
 	if exists {
-		_, err = db.ExecContext(ctx, "UPDATE users SET status = ? , distance = distance + ? WHERE username = ? AND deleted_at IS NULL", status, distance, username)
+
+		var activityID sql.NullString
+		err = db.QueryRowContext(ctx, "SELECT activity_ids FROM users WHERE username = ? AND deleted_at IS NULL", username).Scan(&activityID)
+		if err != nil {
+			return err
+		}
+
+		activityUpdate := activityID.String + meta.ActivityID + ","
+
+		activityIDs := strings.Split(activityID.String, ",")
+		if isRunning && isExistInSliceOfStrings(activityIDs, meta.ActivityID) {
+			meta.DistanceMeter = 0.0
+			meta.ElevationGain = 0.0
+			activityUpdate = activityID.String
+		}
+
+		_, err = db.ExecContext(ctx, "UPDATE users SET status = ? , distance = distance + ?, activity_ids = ?, elevation_gain = elevation_gain + ? WHERE username = ? AND deleted_at IS NULL",
+			status,
+			meta.DistanceMeter,
+			activityUpdate,
+			meta.ElevationGain,
+			username,
+		)
 	} else {
-		_, err = db.ExecContext(ctx, "INSERT INTO users (username, status, distance) VALUES (?, ?, ?)", username, status, distance)
+		_, err = db.ExecContext(ctx, "INSERT INTO users (username, status, distance, activity_ids, elevation_gain) VALUES (?, ?, ?, ?, ?)",
+			username,
+			status,
+			meta.DistanceMeter,
+			","+meta.ActivityID,
+			meta.ElevationGain,
+		)
 	}
 
 	return err
@@ -248,7 +305,7 @@ func startDailyIncrementJob(ctx context.Context, bot *tgbotapi.BotAPI) *cron.Cro
 		msg.MessageThreadId = threadID
 		bot.Send(msg)
 
-		_, err = db.ExecContext(ctx, "UPDATE users SET distance = 0 WHERE deleted_at IS NULL")
+		_, err = db.ExecContext(ctx, "UPDATE users SET distance = 0, activity_ids = '', elevation_gain = 0 WHERE deleted_at IS NULL")
 		if err != nil {
 			log.Println("Error resetting distance:", err)
 		}
@@ -463,9 +520,29 @@ func setStravaID(ctx context.Context, username string, stravaID string) error {
 	return nil
 }
 
+func getAllUsers(ctx context.Context) ([]string, error) {
+	rows, err := db.QueryContext(ctx, "SELECT username FROM users WHERE deleted_at IS NULL")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []string
+	for rows.Next() {
+		var username string
+		err := rows.Scan(&username)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, username)
+	}
+
+	return users, nil
+}
+
 const timeFormat = "02 Jan 2006 15:04:05 MST"
 
-var previewIgURL = "instagramez.com"
+var previewIgURL = "kkinstagram.com"
 var previewIgUrlMtx sync.RWMutex
 
 func main() {
@@ -503,6 +580,7 @@ func main() {
 	idRegex := regexp.MustCompile(`^/id @(\w+) (\d+)$`)
 	setByLinkRegex := regexp.MustCompile(`^/sbl @(\w+) (.+)$`)
 	ig := regexp.MustCompile(`^/ig ([a-z.]+)$`)
+	trail := regexp.MustCompile(`^/trail (\w+)$`)
 
 	// Create a channel to signal when message processing is done
 	done := make(chan struct{})
@@ -520,6 +598,30 @@ func main() {
 					return
 				}
 				if update.Message == nil {
+					continue
+				}
+
+				userID := update.Message.From.ID
+				text := update.Message.Text
+				if text == "/all" {
+					if !isAdmin(bot, chatID, userID) {
+						continue
+					}
+
+					users, err := getAllUsers(ctx)
+					if err != nil {
+						log.Println("Error getting all users: ", err)
+						continue
+					}
+
+					messageText := "PING All users:\n"
+					for _, user := range users {
+						messageText += "@" + user + " "
+					}
+
+					msg := tgbotapi.NewMessage(chatID, messageText)
+					msg.MessageThreadId = update.Message.MessageThreadId
+					bot.Send(msg)
 					continue
 				}
 
@@ -547,11 +649,22 @@ func main() {
 					continue
 				}
 
+				if match := trail.FindStringSubmatch(text); match != nil {
+					if !isAdmin(bot, chatID, userID) {
+						msg := tgbotapi.NewMessage(chatID, "You must be an admin to use this command.")
+						msg.MessageThreadId = update.Message.MessageThreadId
+						bot.Send(msg)
+						continue
+					}
+
+					poll := createTrailPooling(ctx, chatID, threadID, match[1])
+					bot.Send(poll)
+					continue
+				}
+
 				if chatID != update.Message.Chat.ID {
 					continue
 				}
-				userID := update.Message.From.ID
-				text := update.Message.Text
 
 				// Ensure user exists in database when they send a message
 				username := update.Message.From.UserName
@@ -595,12 +708,7 @@ func main() {
 					}
 
 					if meta != nil {
-						distance := meta.DistanceMeter / 1000
-						if meta.SportType != "Run" {
-							distance = 0
-						}
-
-						err := resetStatus(ctx, username, meta.Status, distance)
+						err := resetStatus(ctx, username, meta.Status, *meta)
 						if err != nil {
 							msg := tgbotapi.NewMessage(chatID, "Error resetting status.")
 							msg.MessageThreadId = update.Message.MessageThreadId
@@ -617,8 +725,7 @@ Tanggal: %s
 Jarak: %.02fkm
 Pace: %s/km
 Waktu: %s
-Ketinggian: %.02fm
-Foto Rute: %s`
+Ketinggian: %.02fm`
 
 						msg := tgbotapi.NewMessage(chatID,
 							fmt.Sprintf(
@@ -629,14 +736,42 @@ Foto Rute: %s`
 								meta.DistanceMeter/1000,
 								meta.Pace,
 								meta.Time,
-								meta.Elevation,
-								meta.ImageUrl,
+								meta.ElevationGain,
 							),
 						)
+
 						msg.MessageThreadId = update.Message.MessageThreadId
 						_, err = bot.Send(msg)
 						if err != nil {
 							log.Println("Error sending message: ", err)
+							msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("Terjadi kesalahan saat mengirim pesan: %v\n\nTapi tenang saja, status kamu sudah direset. Silahkan kirim link aktivitas Strava untuk mereset status lagi.", err))
+							msg.MessageThreadId = update.Message.MessageThreadId
+							_, err = bot.Send(msg)
+							if err != nil {
+								log.Println("Error sending second message: ", err)
+							}
+							continue
+						}
+
+						resp, err := http.Get(meta.ImageUrl)
+						if err != nil {
+							log.Println("Error getting photo: ", err)
+							continue
+						}
+
+						body, err := io.ReadAll(resp.Body)
+						if err != nil {
+							log.Println("Error reading photo: ", err)
+							resp.Body.Close()
+							continue
+						}
+						resp.Body.Close()
+
+						photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileBytes{Name: uuid.NewString() + ".jpg", Bytes: body})
+						photo.MessageThreadId = update.Message.MessageThreadId
+						_, err = bot.Send(photo)
+						if err != nil {
+							log.Println("Error sending photo: ", err)
 						}
 
 					} else {
@@ -870,12 +1005,7 @@ _Catatan: Gunakan perintah hanya di thread yang ditentukan._`
 
 					if meta != nil {
 						username := update.Message.From.UserName
-
-						distance := meta.DistanceMeter / 1000
-						if meta.SportType != "Run" {
-							distance = 0
-						}
-						err := resetStatus(ctx, username, meta.Status, distance)
+						err := resetStatus(ctx, username, meta.Status, *meta)
 						if err != nil {
 							msg := tgbotapi.NewMessage(chatID, "Error resetting status.")
 							msg.MessageThreadId = update.Message.MessageThreadId
@@ -892,9 +1022,7 @@ Tanggal: %s
 Jarak: %.02fkm
 Pace: %s/km
 Waktu: %s
-Ketinggian: %.02fm
-Foto Rute: %s
-`
+Ketinggian: %.02fm`
 
 						msg := tgbotapi.NewMessage(chatID,
 							fmt.Sprintf(
@@ -905,12 +1033,42 @@ Foto Rute: %s
 								meta.DistanceMeter/1000,
 								meta.Pace,
 								meta.Time,
-								meta.Elevation,
-								meta.ImageUrl,
+								meta.ElevationGain,
 							),
 						)
 						msg.MessageThreadId = update.Message.MessageThreadId
-						bot.Send(msg)
+						_, err = bot.Send(msg)
+						if err != nil {
+							log.Println("Error sending message: ", err)
+							msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("Terjadi kesalahan saat mengirim pesan: %v\n\nTapi tenang saja, status kamu sudah direset. Silahkan kirim link aktivitas Strava untuk mereset status lagi.", err))
+							msg.MessageThreadId = update.Message.MessageThreadId
+							_, err = bot.Send(msg)
+							if err != nil {
+								log.Println("Error sending second message: ", err)
+							}
+							continue
+						}
+
+						resp, err := http.Get(meta.ImageUrl)
+						if err != nil {
+							log.Println("Error getting photo: ", err)
+							continue
+						}
+
+						body, err := io.ReadAll(resp.Body)
+						if err != nil {
+							log.Println("Error reading photo: ", err)
+							resp.Body.Close()
+							continue
+						}
+						resp.Body.Close()
+
+						photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileBytes{Name: uuid.NewString() + ".jpg", Bytes: body})
+						photo.MessageThreadId = update.Message.MessageThreadId
+						_, err = bot.Send(photo)
+						if err != nil {
+							log.Println("Error sending photo: ", err)
+						}
 					} else {
 						msg := tgbotapi.NewMessage(chatID, "Activity tidak valid atau sudah lebih dari 2 hari yang lalu.")
 						msg.MessageThreadId = update.Message.MessageThreadId
@@ -1023,11 +1181,12 @@ func crawlling(activityURL, stravaName string, stravaID string) (meta *Activity,
 		}
 
 		meta = &Activity{
+			ActivityID:    data.Props.PageProps.Activity.ID,
 			ActivityName:  data.Props.PageProps.Activity.Name,
 			ActivityDate:  data.Props.PageProps.Activity.StartLocal,
 			DistanceMeter: data.Props.PageProps.Activity.Scalars.Distance,
 			Time:          fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds),
-			Elevation:     data.Props.PageProps.Activity.Scalars.ElevationGain,
+			ElevationGain: data.Props.PageProps.Activity.Scalars.ElevationGain,
 			Pace:          fmt.Sprintf("%02d:%02d", paceMinute, paceSecond),
 			ImageUrl:      imgLocation,
 			Status:        int(t.Unix()) + data.Props.PageProps.Activity.Scalars.MovingTime,
@@ -1196,7 +1355,7 @@ func ConvertToVXTwitterURL(twitterURL string) (url string) {
 }
 
 func getDistance(ctx context.Context, isFInal bool) (msg string, err error) {
-	rows, err := db.QueryContext(ctx, "SELECT username, distance FROM users WHERE deleted_at IS NULL and distance > 0 ORDER BY distance DESC")
+	rows, err := db.QueryContext(ctx, "SELECT username, distance, elevation_gain FROM users WHERE deleted_at IS NULL and distance > 0 ORDER BY distance DESC")
 	if err != nil {
 		return
 	}
@@ -1213,10 +1372,12 @@ func getDistance(ctx context.Context, isFInal bool) (msg string, err error) {
 	for rows.Next() {
 		var username string
 		var distance float64
-		err = rows.Scan(&username, &distance)
+		var elevationGain float64
+		err = rows.Scan(&username, &distance, &elevationGain)
 		if err != nil {
 			return
 		}
+		distance = distance / 1000 // convert to km
 		if first == 0 {
 			first = distance
 		}
@@ -1227,7 +1388,7 @@ func getDistance(ctx context.Context, isFInal bool) (msg string, err error) {
 			multiple = 0
 		}
 		bar := fmt.Sprintf("|%s|", strings.Repeat("=", multiple))
-		msg += fmt.Sprintf("%s %s: %.02fkm", bar, username, distance)
+		msg += fmt.Sprintf("%s %s: %.02fkm %.02fm", bar, username, distance, elevationGain)
 		count++
 
 		if count == 1 {
@@ -1249,4 +1410,24 @@ func getDistance(ctx context.Context, isFInal bool) (msg string, err error) {
 		msg += "\n"
 	}
 	return
+}
+
+func isExistInSliceOfStrings(slice []string, str string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
+}
+
+func createTrailPooling(ctx context.Context, chatID int64, threadID int, tanggal string) tgbotapi.SendPollConfig {
+	poll := tgbotapi.NewPoll(chatID,
+		fmt.Sprintf("Trail:\n%s\n\nSilahkan pilih trail yang akan kita lakukan minggu ini", tanggal),
+		"Medas", "Merumatta", "Timponan", "Keteri", "Gn. Sasak", "Other (comment)")
+	poll.IsAnonymous = false
+	poll.IsClosed = false
+	poll.MessageThreadId = threadID
+
+	return poll
 }

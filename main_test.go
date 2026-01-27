@@ -21,7 +21,7 @@ func TestValidateActivity(t *testing.T) {
 	fmt.Println("Date: ", meta.ActivityDate)
 	fmt.Println("Distance: ", meta.DistanceMeter)
 	fmt.Println("Time: ", meta.Time)
-	fmt.Println("Elevation: ", meta.Elevation)
+	fmt.Println("Elevation: ", meta.ElevationGain)
 	fmt.Println("--------------------------------")
 
 	assert.NoError(t, err)
@@ -38,7 +38,7 @@ func TestValidateActivity(t *testing.T) {
 	fmt.Println("Date: ", meta.ActivityDate)
 	fmt.Println("Distance: ", meta.DistanceMeter)
 	fmt.Println("Time: ", meta.Time)
-	fmt.Println("Elevation: ", meta.Elevation)
+	fmt.Println("Elevation: ", meta.ElevationGain)
 	fmt.Println("--------------------------------")
 
 	assert.NoError(t, err)
@@ -55,7 +55,7 @@ func TestValidateActivity(t *testing.T) {
 	fmt.Println("Date: ", meta.ActivityDate)
 	fmt.Println("Distance: ", meta.DistanceMeter)
 	fmt.Println("Time: ", meta.Time)
-	fmt.Println("Elevation: ", meta.Elevation)
+	fmt.Println("Elevation: ", meta.ElevationGain)
 	fmt.Println("--------------------------------")
 	assert.NoError(t, err)
 	assert.NotNil(t, meta, "Expected activity to be valid")
