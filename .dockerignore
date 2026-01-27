@@ -1,0 +1,27 @@
+# Build artifacts
+app
+*.db
+
+# Deployment files
+Makefile
+hosts.ini
+deploy-ppk.yml
+x.txt
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Documentation
+README.md
+readme.md
+*.md
+
+# Test files
+*_test.go
